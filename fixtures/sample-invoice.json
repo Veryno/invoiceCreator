@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "company": {
+    "name": "Northstar Studio & Build",
+    "email": "hello@northstarbuild.com",
+    "phone": "(415) 555-0138",
+    "website": "northstarbuild.com",
+    "address": "1800 Montgomery Street\nSan Francisco, CA 94111",
+    "taxId": "94-3812740",
+    "logo": ""
+  },
+  "customer": {
+    "name": "Riverside Property Group",
+    "email": "accounts@riversideproperty.com",
+    "phone": "(510) 555-0184",
+    "address": "420 Harbor Avenue\nOakland, CA 94607"
+  },
+  "meta": {
+    "number": "INV-2026-001",
+    "issueDate": "2026-08-17",
+    "dueDate": "2026-09-16",
+    "terms": "Net 30",
+    "poNumber": "PO-1048",
+    "currency": "USD",
+    "locale": "en-US",
+    "status": "Draft"
+  },
+  "lineItems": [
+    {
+      "id": "sample-design",
+      "serviceDate": "2026-08-17",
+      "item": "Design consultation",
+      "description": "Space planning, finish selections, and project specifications",
+      "quantity": 10,
+      "rate": 125,
+      "taxable": true
+    },
+    {
+      "id": "sample-materials",
+      "serviceDate": "2026-08-17",
+      "item": "Materials & finishes",
+      "description": "Custom millwork samples and approved finish materials",
+      "quantity": 1,
+      "rate": 1850,
+      "taxable": true
+    },
+    {
+      "id": "sample-coordination",
+      "serviceDate": "2026-08-17",
+      "item": "Project coordination",
+      "description": "Vendor scheduling, site coordination, and progress reporting",
+      "quantity": 6,
+      "rate": 85,
+      "taxable": false
+    }
+  ],
+  "adjustments": {
+    "discountType": "percent",
+    "discountValue": 5,
+    "shipping": 65,
+    "deposit": 500,
+    "taxRate": 8.25
+  },
+  "content": {
+    "notes": "Thank you for choosing Northstar Studio & Build. We appreciate your business.",
+    "paymentInstructions": "Payment is due within 30 days. Please include the invoice number with your payment."
+  },
+  "design": {
+    "template": "modern",
+    "accentColor": "#2563EB",
+    "font": "Inter",
+    "paperSize": "Letter",
+    "showServiceDate": true,
+    "showItem": true
+  }
+}

@@ -1,0 +1,100 @@
+name: Release desktop installers
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Package ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS-arm64
+            os: macos-15
+            artifact: desktop-macos-arm64
+            files: |
+              release/*.dmg
+              release/*.zip
+          - label: macOS-x64
+            os: macos-15-intel
+            artifact: desktop-macos-x64
+            files: |
+              release/*.dmg
+              release/*.zip
+          - label: Windows-x64
+            os: windows-2025
+            artifact: desktop-windows-x64
+            files: |
+              release/*.exe
+              release/*.zip
+          - label: Linux-x64
+            os: ubuntu-24.04
+            artifact: desktop-linux-x64
+            files: |
+              release/*.AppImage
+              release/*.deb
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Package desktop application
+        run: npm run dist -- --publish never
+
+      - name: Stage release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packaged applications
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish tagged release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

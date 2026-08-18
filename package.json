@@ -1,0 +1,87 @@
+{
+  "name": "invoice-studio",
+  "version": "1.0.0",
+  "description": "A private, offline-first desktop invoice creator with professional PDF export.",
+  "private": true,
+  "author": "Invoice Studio contributors",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "desktop:dev": "concurrently -k -s first \"vite --host 0.0.0.0\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs",
+    "test:sites": "node --test tests/sites-worker.test.mjs",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run test && npm run build && electron-builder",
+    "dist:mac": "npm run test && npm run build && electron-builder --mac",
+    "dist:win": "npm run test && npm run build && electron-builder --win",
+    "dist:linux": "npm run test && npm run build && electron-builder --linux",
+    "sample:xlsx": "node scripts/create-sample-xlsx.mjs",
+    "pdf:sample": "npm run build && electron scripts/render-sample-pdf.cjs"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@vitejs/plugin-react": "5.0.4",
+    "decimal.js": "^10.6.0",
+    "exceljs": "^4.4.0",
+    "papaparse": "^5.6.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "vite": "^6.4.3"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.invoicestudio.desktop",
+    "productName": "Invoice Studio",
+    "asar": true,
+    "icon": "build/icon.png",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/client/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "category": "Office",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}
