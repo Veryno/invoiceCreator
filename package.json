@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "A private, offline-first desktop invoice creator with professional PDF export.",
   "private": true,
-  "author": "Invoice Studio contributors",
+  "author": {
+    "name": "Veryno",
+    "email": "142442413+Veryno@users.noreply.github.com"
+  },
   "license": "MIT",
   "main": "electron/main.cjs",
   "type": "module",
