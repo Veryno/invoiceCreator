@@ -23,11 +23,20 @@ if (repositoryMatch) {
   };
 }
 
-// Tagged GitHub releases are the automatic-update trust boundary. Refuse to
-// publish an unsigned Windows installer even if a signing secret is missing or
-// malformed; unsigned local development packages remain available.
+// When signing credentials are configured, fail the CI build instead of
+// silently publishing a broken signature. Personal releases may remain
+// unsigned until a certificate is added to the repository secrets.
 if (process.env.GITHUB_ACTIONS === "true" && process.platform === "win32") {
-  config.forceCodeSigning = true;
+  const hasCertificate = Boolean(process.env.WIN_CSC_LINK?.trim());
+  const hasPassword = Boolean(process.env.WIN_CSC_KEY_PASSWORD?.trim());
+
+  if (hasCertificate !== hasPassword) {
+    throw new Error(
+      "WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD must either both be configured or both be empty.",
+    );
+  }
+
+  if (hasCertificate) config.forceCodeSigning = true;
 }
 
 module.exports = config;

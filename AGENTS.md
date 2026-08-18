@@ -16,3 +16,4 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Core output is a customizable, searchable professional PDF saved through a native file dialog.
 - The product is offline-first and single-user. Do not add cloud sync, accounts, analytics, or external data transmission without an explicit request.
 - Keep the public README concise and conversational. Lead with the installer download, keep developer setup brief, and leave maintainer-only release, signing, and update details out of it.
+- Unsigned GitHub installers are acceptable for the initial personal Windows release. Preserve optional Authenticode signing and signature verification for future releases.
