@@ -15,4 +15,4 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Core input methods are manual entry plus CSV, XLSX, and JSON import. Legacy `.xls` files should be converted to XLSX or CSV before import.
 - Core output is a customizable, searchable professional PDF saved through a native file dialog.
 - The product is offline-first and single-user. Do not add cloud sync, accounts, analytics, or external data transmission without an explicit request.
-- Keep the public README concise and conversational: describe the app, local setup, release setup, and privacy without turning it into full product documentation.
+- Keep the public README concise and conversational. Lead with the installer download, keep developer setup brief, and leave maintainer-only release, signing, and update details out of it.
