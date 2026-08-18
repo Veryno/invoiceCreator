@@ -10,8 +10,6 @@ Download the latest Windows installer from the [Releases page](https://github.co
 
 Open the `.exe` file and follow the installer. Git, Node.js, and npm are not needed to use the installed app.
 
-The first installer will appear there once the initial release is published.
-
 ## Development
 
 Developers will need [Node.js 22 or newer](https://nodejs.org/).

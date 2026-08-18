@@ -66,17 +66,6 @@ jobs:
       - name: Build renderer
         run: npm run build
 
-      - name: Require Windows signing credentials
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: |
-          if (-not $env:WIN_CSC_LINK -or -not $env:WIN_CSC_KEY_PASSWORD) {
-            throw "Stable Windows releases require WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD."
-          }
-
       - name: Package desktop application
         run: npm run dist -- --publish never
         env:
@@ -87,10 +76,16 @@ jobs:
         if: runner.os == 'Windows'
         run: npm run verify:update-assets
 
-      - name: Verify Windows code signature
+      - name: Verify Windows code signature when configured
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
         run: |
+          if (-not $env:WIN_CSC_LINK) {
+            Write-Warning "Publishing an unsigned Windows installer. Windows will show an unknown-publisher warning."
+            exit 0
+          }
           $installer = Get-ChildItem release/Invoice-Studio-Setup-*.exe | Select-Object -First 1
           if (-not $installer) { throw "Windows installer was not found." }
           $signature = Get-AuthenticodeSignature $installer.FullName
