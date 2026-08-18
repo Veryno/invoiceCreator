@@ -236,9 +236,15 @@ export function duplicateLineItem(lineItem = {}) {
   return makeLineItem(copy);
 }
 
+export function normalizeHexColorInput(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  const digits = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
+  return /^[0-9a-f]{6}$/i.test(digits) ? `#${digits.toUpperCase()}` : null;
+}
+
 function normalizedHexColor(value, fallback = "#2563EB") {
-  const color = asString(value, fallback);
-  return /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : fallback;
+  return normalizeHexColorInput(asString(value, fallback)) || fallback;
 }
 
 function colorChannels(hexColor) {
@@ -367,9 +373,7 @@ export function normalizeInvoice(input = {}) {
     },
     design: {
       template: asString(design.template, defaults.design.template),
-      accentColor: /^#[0-9a-f]{6}$/i.test(accentColor)
-        ? accentColor.toUpperCase()
-        : defaults.design.accentColor,
+      accentColor: normalizeHexColorInput(accentColor) || defaults.design.accentColor,
       font: asString(design.font, defaults.design.font),
       paperSize: design.paperSize === "A4" ? "A4" : "Letter",
       showServiceDate: asBoolean(design.showServiceDate, defaults.design.showServiceDate),

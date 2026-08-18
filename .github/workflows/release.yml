@@ -38,7 +38,8 @@ jobs:
             artifact: desktop-windows-x64
             files: |
               release/*.exe
-              release/*.zip
+              release/*.exe.blockmap
+              release/latest.yml
           - label: Linux-x64
             os: ubuntu-24.04
             artifact: desktop-linux-x64
@@ -65,8 +66,37 @@ jobs:
       - name: Build renderer
         run: npm run build
 
+      - name: Require Windows signing credentials
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if (-not $env:WIN_CSC_LINK -or -not $env:WIN_CSC_KEY_PASSWORD) {
+            throw "Stable Windows releases require WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD."
+          }
+
       - name: Package desktop application
         run: npm run dist -- --publish never
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      - name: Verify Windows update metadata
+        if: runner.os == 'Windows'
+        run: npm run verify:update-assets
+
+      - name: Verify Windows code signature
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem release/Invoice-Studio-Setup-*.exe | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not found." }
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne "Valid") {
+            throw "Installer signature is $($signature.Status), expected Valid."
+          }
 
       - name: Stage release artifacts
         uses: actions/upload-artifact@v4

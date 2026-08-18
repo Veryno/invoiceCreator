@@ -1,6 +1,7 @@
 import { Receipt } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CustomizationPanel } from "./components/CustomizationPanel.jsx";
+import { CompanyProfile } from "./components/CompanyProfile.jsx";
 import { ImportDialog } from "./components/ImportDialog.jsx";
 import { InvoiceDocument } from "./components/InvoiceDocument.jsx";
 import { InvoiceEditor } from "./components/InvoiceEditor.jsx";
@@ -8,6 +9,8 @@ import { PreviewCanvas } from "./components/PreviewCanvas.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
 import { Toast } from "./components/Toast.jsx";
 import { Topbar } from "./components/Topbar.jsx";
+import { UpdateDialog } from "./components/UpdateDialog.jsx";
+import { useAppUpdater } from "./hooks/useAppUpdater.js";
 import { useInvoiceDraft } from "./hooks/useInvoiceDraft.js";
 import { exportPdf, saveTextFile } from "./lib/desktop.js";
 import {
@@ -32,11 +35,14 @@ function mergeInvoice(current, patch) {
 
 export function App() {
   const draft = useInvoiceDraft();
+  const updater = useAppUpdater();
   const [viewMode, setViewMode] = useState("editor");
+  const [activePage, setActivePage] = useState("invoices");
   const [importOpen, setImportOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [updatesOpen, setUpdatesOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const isPrintFixture = useMemo(
@@ -51,6 +57,12 @@ export function App() {
   useEffect(() => {
     document.title = `${draft.invoice.meta.number || "Draft"} · Invoice Studio`;
   }, [draft.invoice.meta.number]);
+
+  useEffect(() => {
+    if (["available", "ready"].includes(updater.state.status)) {
+      setUpdatesOpen(true);
+    }
+  }, [updater.state.status]);
 
   const filenameBase = useMemo(() => {
     const number = sanitizeFilenamePart(draft.invoice.meta.number || "Draft");
@@ -90,6 +102,26 @@ export function App() {
     }
   }, [draft.invoice, filenameBase]);
 
+  const handleUpdateAction = useCallback(async (action, fallbackMessage) => {
+    try {
+      await action();
+    } catch (error) {
+      setToast({
+        type: "error",
+        title: "Update couldn’t continue",
+        message: error?.message || fallbackMessage,
+      });
+    }
+  }, []);
+
+  const handleRestartUpdate = useCallback(async () => {
+    draft.saveNow();
+    await handleUpdateAction(
+      updater.restartAndInstall,
+      "Close and reopen Invoice Studio, then try the update again.",
+    );
+  }, [draft, handleUpdateAction, updater.restartAndInstall]);
+
   const handleImport = useCallback(async (file) => {
     if (file.size > 10 * 1024 * 1024) {
       setToast({ type: "error", title: "File is too large", message: "Choose a file smaller than 10 MB." });
@@ -99,7 +131,10 @@ export function App() {
     try {
       const { importInvoiceFile } = await import("./lib/importInvoice.js");
       const result = await importInvoiceFile(file);
-      draft.replaceInvoice(mergeInvoice(draft.invoice, result.invoicePatch));
+      const nextInvoice = result.mergeStrategy === "replace"
+        ? normalizeInvoice(result.invoicePatch)
+        : mergeInvoice(draft.invoice, result.invoicePatch);
+      draft.replaceInvoice(nextInvoice);
       setImportOpen(false);
       const warningText = result.warnings?.length
         ? ` ${result.warnings.length} import ${result.warnings.length === 1 ? "warning" : "warnings"}: ${result.warnings.slice(0, 2).join(" ")}`
@@ -137,10 +172,11 @@ export function App() {
   }
 
   function handleNew() {
-    if (window.confirm("Start a new blank invoice? Your current draft has already been saved locally.")) {
+    if (window.confirm("Start a new blank invoice? This replaces the current draft. Save the data first if you need a backup. Your company profile and branding will be kept.")) {
       draft.resetInvoice();
+      setActivePage("invoices");
       setViewMode("editor");
-      setToast({ title: "Blank invoice created", message: "Your current draft has been replaced by a blank one." });
+      setToast({ title: "Blank invoice created", message: "Company details and branding were carried into the new draft." });
     }
   }
 
@@ -162,31 +198,41 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar
+        activePage={activePage}
+        onNavigate={(page) => setActivePage(page)}
+        onSettings={() => setUpdatesOpen(true)}
+      />
       <div className="app-main">
-        <Topbar
-          invoiceNumber={draft.invoice.meta.number}
-          savedAt={draft.savedAt}
-          viewMode={viewMode}
-          onViewMode={setViewMode}
-          onImport={() => setImportOpen(true)}
-          onSaveJson={handleSaveJson}
-          onExport={handleExport}
-          onNew={handleNew}
-          onCustomize={() => setCustomizeOpen(true)}
-          isExporting={isExporting}
-        />
-        <main className="workspace">
-          <div className="workspace-content">
-            {viewMode === "editor" ? <InvoiceEditor draft={draft} /> : <PreviewCanvas invoice={draft.invoice} onExport={handleExport} />}
-          </div>
-          <CustomizationPanel
-            invoice={draft.invoice}
-            updateField={draft.updateField}
-            isOpen={customizeOpen}
-            onClose={() => setCustomizeOpen(false)}
-          />
-        </main>
+        {activePage === "company" ? (
+          <CompanyProfile draft={draft} onBack={() => setActivePage("invoices")} />
+        ) : (
+          <>
+            <Topbar
+              invoiceNumber={draft.invoice.meta.number}
+              savedAt={draft.savedAt}
+              viewMode={viewMode}
+              onViewMode={setViewMode}
+              onImport={() => setImportOpen(true)}
+              onSaveJson={handleSaveJson}
+              onExport={handleExport}
+              onNew={handleNew}
+              onCustomize={() => setCustomizeOpen(true)}
+              isExporting={isExporting}
+            />
+            <main className="workspace">
+              <div className="workspace-content">
+                {viewMode === "editor" ? <InvoiceEditor draft={draft} /> : <PreviewCanvas invoice={draft.invoice} onExport={handleExport} />}
+              </div>
+              <CustomizationPanel
+                invoice={draft.invoice}
+                updateField={draft.updateField}
+                isOpen={customizeOpen}
+                onClose={() => setCustomizeOpen(false)}
+              />
+            </main>
+          </>
+        )}
       </div>
 
       <div className="print-root" aria-hidden="true">
@@ -201,6 +247,14 @@ export function App() {
         isImporting={isImporting}
       />
       <Toast toast={toast} onClose={() => setToast(null)} />
+      <UpdateDialog
+        open={updatesOpen}
+        onClose={() => setUpdatesOpen(false)}
+        updateState={updater.state}
+        onCheck={() => handleUpdateAction(updater.checkForUpdates, "Try checking again in a moment.")}
+        onDownload={() => handleUpdateAction(updater.downloadUpdate, "Try downloading the update again.")}
+        onRestart={handleRestartUpdate}
+      />
     </div>
   );
 }

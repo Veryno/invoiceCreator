@@ -6,6 +6,8 @@ import {
   TextAa,
   X,
 } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { normalizeHexColorInput } from "../lib/invoice.js";
 
 const templates = [
   { id: "modern", label: "Modern", detail: "Bold header" },
@@ -30,6 +32,81 @@ function Switch({ id, checked, onChange, children }) {
         <span aria-hidden="true" />
       </span>
     </label>
+  );
+}
+
+function BrandColorControl({ value, onChange }) {
+  const [hexDraft, setHexDraft] = useState(value);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setHexDraft(value);
+    setError("");
+  }, [value]);
+
+  function commitHexColor() {
+    const normalized = normalizeHexColorInput(hexDraft);
+    if (!normalized) {
+      setError("Enter a 6-digit HEX color, such as #0F766E.");
+      return;
+    }
+
+    setHexDraft(normalized);
+    setError("");
+    onChange(normalized);
+  }
+
+  function resetHexColor() {
+    setHexDraft(value);
+    setError("");
+  }
+
+  return (
+    <>
+      <div className="custom-color-controls">
+        <label className="custom-color-picker" htmlFor="custom-accent-color">
+          <span>RGB</span>
+          <input
+            id="custom-accent-color"
+            type="color"
+            value={value}
+            aria-label="RGB color picker"
+            onChange={(event) => onChange(event.target.value.toUpperCase())}
+          />
+        </label>
+        <label className="hex-color-field" htmlFor="custom-accent-hex">
+          <span>HEX</span>
+          <input
+            id="custom-accent-hex"
+            type="text"
+            value={hexDraft}
+            maxLength={7}
+            spellCheck="false"
+            autoComplete="off"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "custom-accent-error" : undefined}
+            onChange={(event) => {
+              setHexDraft(event.target.value);
+              if (error) setError("");
+            }}
+            onBlur={commitHexColor}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitHexColor();
+                event.currentTarget.blur();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                resetHexColor();
+                event.currentTarget.blur();
+              }
+            }}
+          />
+        </label>
+      </div>
+      {error && <p className="color-field-error" id="custom-accent-error" role="alert">{error}</p>}
+    </>
   );
 }
 
@@ -92,16 +169,11 @@ export function CustomizationPanel({ invoice, updateField, isOpen, onClose }) {
               {invoice.design.accentColor === color.value && <Check size={14} weight="bold" aria-hidden="true" />}
             </button>
           ))}
-          <label className="custom-color" htmlFor="custom-accent-color" title="Choose a custom color">
-            <input
-              id="custom-accent-color"
-              type="color"
-              value={invoice.design.accentColor}
-              onChange={(event) => updateField("design.accentColor", event.target.value.toUpperCase())}
-            />
-            <span>Custom</span>
-          </label>
         </div>
+        <BrandColorControl
+          value={invoice.design.accentColor}
+          onChange={(color) => updateField("design.accentColor", color)}
+        />
       </section>
 
       <section className="customizer-section" aria-labelledby="typography-heading">

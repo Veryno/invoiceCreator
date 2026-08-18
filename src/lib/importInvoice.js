@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import ExcelJS from "exceljs";
+import { normalizeInvoice } from "./invoice.js";
 
 /**
  * Accepted column/header aliases for tabular and flat-JSON imports.
@@ -978,6 +979,24 @@ function normalizeCanonicalInvoice(source, warnings) {
   return patch;
 }
 
+function normalizeCanonicalSource(source, warnings) {
+  const schemaVersion = findOwnValue(source, ["schemaVersion", "schema version"]);
+  if (!schemaVersion.present) return normalizeCanonicalInvoice(source, warnings);
+
+  if (Number(schemaVersion.value) !== 1) {
+    addWarning(
+      warnings,
+      `Invoice Studio schema version ${String(schemaVersion.value)} is not supported; imported compatible fields only.`,
+    );
+    return normalizeCanonicalInvoice(source, warnings);
+  }
+
+  const sanitized = sanitizeDeep(source, warnings, "invoice backup");
+  if (!isPlainObject(sanitized)) return {};
+  delete sanitized.schemaVersion;
+  return normalizeInvoice(sanitized);
+}
+
 function hasRecognizedData(patch) {
   return Object.keys(patch).some((key) => {
     const value = patch[key];
@@ -1019,15 +1038,23 @@ function normalizeJsonValue(value, warnings) {
   if (Array.isArray(value)) {
     if (!value.length) {
       addWarning(warnings, "The JSON array was empty.");
-      return { invoicePatch: {}, rowCount: 0 };
+      return { invoicePatch: {}, rowCount: 0, mergeStrategy: "patch" };
     }
     if (looksLikeCanonicalInvoice(value[0])) {
       if (value.length > 1) {
         addWarning(warnings, `The JSON contained ${value.length} invoices; only the first was imported.`);
       }
-      return { invoicePatch: normalizeCanonicalInvoice(value[0], warnings), rowCount: 1 };
+      return {
+        invoicePatch: normalizeCanonicalSource(value[0], warnings),
+        rowCount: 1,
+        mergeStrategy: "replace",
+      };
     }
-    return { invoicePatch: normalizeFlatRows(value, warnings), rowCount: value.length };
+    return {
+      invoicePatch: normalizeFlatRows(value, warnings),
+      rowCount: value.length,
+      mergeStrategy: "patch",
+    };
   }
 
   if (!isPlainObject(value)) {
@@ -1036,14 +1063,18 @@ function normalizeJsonValue(value, warnings) {
 
   const wrappedInvoice = findOwnValue(value, ["invoice"]);
   if (wrappedInvoice.present && isPlainObject(wrappedInvoice.value)) {
-    return { invoicePatch: normalizeCanonicalInvoice(wrappedInvoice.value, warnings), rowCount: 1 };
+    return {
+      invoicePatch: normalizeCanonicalSource(wrappedInvoice.value, warnings),
+      rowCount: 1,
+      mergeStrategy: "replace",
+    };
   }
 
   const wrappedInvoices = findOwnValue(value, ["invoices"]);
   if (wrappedInvoices.present && Array.isArray(wrappedInvoices.value)) {
     if (!wrappedInvoices.value.length) {
       addWarning(warnings, "The invoices array was empty.");
-      return { invoicePatch: {}, rowCount: 0 };
+      return { invoicePatch: {}, rowCount: 0, mergeStrategy: "patch" };
     }
     if (wrappedInvoices.value.length > 1) {
       addWarning(
@@ -1052,8 +1083,9 @@ function normalizeJsonValue(value, warnings) {
       );
     }
     return {
-      invoicePatch: normalizeCanonicalInvoice(wrappedInvoices.value[0], warnings),
+      invoicePatch: normalizeCanonicalSource(wrappedInvoices.value[0], warnings),
       rowCount: 1,
+      mergeStrategy: "replace",
     };
   }
 
@@ -1062,13 +1094,22 @@ function normalizeJsonValue(value, warnings) {
     return {
       invoicePatch: normalizeFlatRows(wrappedRows.value, warnings),
       rowCount: wrappedRows.value.length,
+      mergeStrategy: "patch",
     };
   }
 
   if (looksLikeCanonicalInvoice(value)) {
-    return { invoicePatch: normalizeCanonicalInvoice(value, warnings), rowCount: 1 };
+    return {
+      invoicePatch: normalizeCanonicalSource(value, warnings),
+      rowCount: 1,
+      mergeStrategy: "replace",
+    };
   }
-  return { invoicePatch: normalizeFlatRows([value], warnings), rowCount: 1 };
+  return {
+    invoicePatch: normalizeFlatRows([value], warnings),
+    rowCount: 1,
+    mergeStrategy: "patch",
+  };
 }
 
 function rowHasData(row) {
@@ -1290,7 +1331,8 @@ async function readImportSource(input, options) {
  *
  * `rowCount` is the number of tabular/flat-JSON source rows considered. A
  * canonical invoice object (or the first object in an invoice array) counts as
- * one source record.
+ * one source record. `mergeStrategy` is `"replace"` for canonical JSON backups
+ * and `"patch"` for row-based CSV, XLSX, and flat JSON imports.
  */
 export async function importInvoice(input, options = {}) {
   const warnings = [];
@@ -1309,16 +1351,29 @@ export async function importInvoice(input, options = {}) {
     normalized = normalizeJsonValue(value, warnings);
   } else if (source.format === "csv") {
     const rows = parseCsv(source.text, warnings);
-    normalized = { invoicePatch: normalizeFlatRows(rows, warnings), rowCount: rows.length };
+    normalized = {
+      invoicePatch: normalizeFlatRows(rows, warnings),
+      rowCount: rows.length,
+      mergeStrategy: "patch",
+    };
   } else {
     if (!source.arrayBuffer) {
       throw new TypeError("XLSX imports require a File, Blob, ArrayBuffer, or typed array.");
     }
     const rows = await parseWorkbook(source.arrayBuffer, warnings);
-    normalized = { invoicePatch: normalizeFlatRows(rows, warnings), rowCount: rows.length };
+    normalized = {
+      invoicePatch: normalizeFlatRows(rows, warnings),
+      rowCount: rows.length,
+      mergeStrategy: "patch",
+    };
   }
 
-  return { invoicePatch: normalized.invoicePatch, warnings, rowCount: normalized.rowCount };
+  return {
+    invoicePatch: normalized.invoicePatch,
+    warnings,
+    rowCount: normalized.rowCount,
+    mergeStrategy: normalized.mergeStrategy,
+  };
 }
 
 export const importInvoiceFile = importInvoice;

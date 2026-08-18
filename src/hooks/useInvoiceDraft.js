@@ -47,6 +47,11 @@ export function useInvoiceDraft() {
     return () => window.clearTimeout(timer);
   }, [invoice]);
 
+  const saveNow = useCallback(() => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(invoice));
+    setSavedAt(new Date());
+  }, [invoice]);
+
   const updateField = useCallback((path, value) => {
     setInvoice((current) => setAtPath(current, path, value));
   }, []);
@@ -94,13 +99,18 @@ export function useInvoiceDraft() {
   }, []);
 
   const resetInvoice = useCallback(() => {
-    setInvoice(normalizeInvoice({ lineItems: [makeLineItem()] }));
+    setInvoice((current) => normalizeInvoice({
+      company: current.company,
+      design: current.design,
+      lineItems: [makeLineItem()],
+    }));
   }, []);
 
   return useMemo(
     () => ({
       invoice,
       savedAt,
+      saveNow,
       updateField,
       updateLine,
       addLine,
@@ -112,6 +122,7 @@ export function useInvoiceDraft() {
     [
       invoice,
       savedAt,
+      saveNow,
       updateField,
       updateLine,
       addLine,

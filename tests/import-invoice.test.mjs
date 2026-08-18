@@ -7,6 +7,7 @@ import {
   importInvoice,
   sanitizeSpreadsheetText,
 } from "../src/lib/importInvoice.js";
+import { normalizeInvoice } from "../src/lib/invoice.js";
 
 function asArrayBuffer(text) {
   return new TextEncoder().encode(text).buffer;
@@ -189,6 +190,30 @@ test("round-trips the app's content, adjustments, and design sections", async ()
   });
   assert.equal(result.invoicePatch.company.taxId, "12-3456789");
   assert.equal(result.invoicePatch.meta.locale, "en-CA");
+  assert.equal(result.mergeStrategy, "replace");
+});
+
+test("restores canonical JSON backups with replacement semantics", async () => {
+  const result = await importInvoice({
+    schemaVersion: 1,
+    company: { name: "Imported Co", email: "", phone: "", website: "", address: "", taxId: "", logo: "" },
+    customer: { name: "", email: "", phone: "", address: "" },
+    meta: { number: "RESTORED-1", issueDate: "", dueDate: "", terms: "", currency: "USD", locale: "en-US", status: "Draft" },
+    adjustments: { discountType: "percent", discountValue: 0, shipping: 0, deposit: 0, taxRate: 0 },
+    content: { notes: "", paymentInstructions: "" },
+    design: { template: "modern", accentColor: "#2563EB", font: "Inter", paperSize: "Letter", showServiceDate: true, showItem: true },
+    lineItems: [],
+  });
+
+  const restored = normalizeInvoice(result.invoicePatch);
+  assert.equal(result.mergeStrategy, "replace");
+  assert.equal(restored.company.name, "Imported Co");
+  assert.equal(restored.company.logo, "");
+  assert.equal(restored.customer.name, "");
+  assert.equal(restored.meta.issueDate, "");
+  assert.equal(restored.meta.dueDate, "");
+  assert.equal(restored.meta.terms, "");
+  assert.deepEqual(restored.lineItems, []);
 });
 
 test("treats flat JSON arrays as line-item rows", async () => {

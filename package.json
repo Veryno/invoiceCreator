@@ -14,11 +14,12 @@
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run test && npm run build && electron-builder",
-    "dist:mac": "npm run test && npm run build && electron-builder --mac",
-    "dist:win": "npm run test && npm run build && electron-builder --win",
-    "dist:linux": "npm run test && npm run build && electron-builder --linux",
+    "verify:update-assets": "node scripts/verify-windows-update-assets.mjs",
+    "pack": "npm run build && electron-builder --config electron-builder.config.cjs --dir",
+    "dist": "npm run test && npm run build && electron-builder --config electron-builder.config.cjs",
+    "dist:mac": "npm run test && npm run build && electron-builder --config electron-builder.config.cjs --mac",
+    "dist:win": "npm run test && npm run build && electron-builder --config electron-builder.config.cjs --win --x64",
+    "dist:linux": "npm run test && npm run build && electron-builder --config electron-builder.config.cjs --linux",
     "sample:xlsx": "node scripts/create-sample-xlsx.mjs",
     "pdf:sample": "npm run build && electron scripts/render-sample-pdf.cjs"
   },
@@ -26,6 +27,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "@vitejs/plugin-react": "5.0.4",
     "decimal.js": "^10.6.0",
+    "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",
     "papaparse": "^5.6.0",
     "react": "19.2.0",
@@ -37,12 +39,14 @@
     "cross-env": "^10.1.0",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
-    "wait-on": "^9.1.0"
+    "wait-on": "^9.1.0",
+    "yaml": "^2.9.0"
   },
   "build": {
     "appId": "com.invoicestudio.desktop",
     "productName": "Invoice Studio",
     "asar": true,
+    "electronUpdaterCompatibility": ">=2.16",
     "icon": "build/icon.png",
     "directories": {
       "output": "release"
@@ -60,9 +64,14 @@
       ]
     },
     "win": {
+      "verifyUpdateCodeSignature": true,
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "linux": {
@@ -73,9 +82,14 @@
       ]
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "oneClick": true,
+      "perMachine": false,
+      "packElevateHelper": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Invoice-Studio-Setup-${version}-${arch}.${ext}"
     }
   },
   "engines": {

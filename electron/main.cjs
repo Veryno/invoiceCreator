@@ -10,6 +10,8 @@ const {
   ipcMain,
   protocol,
 } = require("electron");
+const { autoUpdater } = require("electron-updater");
+const { createUpdateManager } = require("./update-manager.cjs");
 
 const APP_NAME = "Invoice Studio";
 const APP_ID = "com.invoicestudio.desktop";
@@ -41,6 +43,11 @@ const CONTENT_TYPES = new Map([
 const IPC_CHANNELS = Object.freeze({
   exportPdf: "invoice-desktop:export-pdf",
   saveTextFile: "invoice-desktop:save-text-file",
+  updateState: "invoice-desktop:update-state",
+  getUpdateState: "invoice-desktop:get-update-state",
+  checkForUpdates: "invoice-desktop:check-for-updates",
+  downloadUpdate: "invoice-desktop:download-update",
+  restartAndInstall: "invoice-desktop:restart-and-install",
 });
 
 const PDF_PAGE_SIZES = new Map([
@@ -49,6 +56,7 @@ const PDF_PAGE_SIZES = new Map([
 ]);
 
 let mainWindow = null;
+let updateManager = null;
 const hardenedSessions = new WeakSet();
 
 protocol.registerSchemesAsPrivileged([
@@ -216,6 +224,23 @@ function ownerWindowFor(event) {
   return BrowserWindow.fromWebContents(event.sender) || mainWindow;
 }
 
+function sendUpdateState(state) {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  mainWindow.webContents.send(IPC_CHANNELS.updateState, state);
+  mainWindow.setProgressBar(
+    state.status === "downloading" && Number.isFinite(state.percent)
+      ? state.percent / 100
+      : -1,
+  );
+}
+
+function requireUpdateManager() {
+  if (!updateManager) {
+    throw new Error("The update service is still starting. Try again in a moment.");
+  }
+  return updateManager;
+}
+
 function registerApplicationProtocol() {
   protocol.handle(APP_SCHEME, async (request) => {
     if (request.method !== "GET") {
@@ -345,6 +370,26 @@ function registerIpcHandlers() {
     await atomicWriteFile(result.filePath, Buffer.from(payload.contents, "utf8"));
     return { canceled: false, filePath: result.filePath };
   });
+
+  ipcMain.handle(IPC_CHANNELS.getUpdateState, (event) => {
+    assertTrustedSender(event);
+    return requireUpdateManager().getState();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.checkForUpdates, async (event) => {
+    assertTrustedSender(event);
+    return requireUpdateManager().checkForUpdates();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.downloadUpdate, async (event) => {
+    assertTrustedSender(event);
+    return requireUpdateManager().downloadUpdate();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.restartAndInstall, (event) => {
+    assertTrustedSender(event);
+    return requireUpdateManager().restartAndInstall();
+  });
 }
 
 function denyRendererPrivileges(webContents) {
@@ -418,6 +463,10 @@ async function createMainWindow() {
     mainWindow = null;
   });
 
+  mainWindow.webContents.once("did-finish-load", () => {
+    if (updateManager) sendUpdateState(updateManager.getState());
+  });
+
   const developmentUrl = getDevelopmentUrl();
   if (developmentUrl) {
     await mainWindow.loadURL(developmentUrl);
@@ -431,7 +480,10 @@ registerIpcHandlers();
 app.whenReady().then(async () => {
   try {
     registerApplicationProtocol();
+    updateManager = createUpdateManager({ app, autoUpdater });
+    updateManager.onState(sendUpdateState);
     await createMainWindow();
+    updateManager.start();
   } catch (error) {
     console.error("Unable to start Invoice Studio:", error);
     dialog.showErrorBox(
@@ -440,6 +492,10 @@ app.whenReady().then(async () => {
     );
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  updateManager?.stop();
 });
 
 app.on("activate", () => {

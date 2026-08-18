@@ -63,7 +63,7 @@ export function InvoiceHeaderForm({ invoice, updateField }) {
               <label className="logo-upload" htmlFor="company-logo">
                 <ImageSquare size={22} aria-hidden="true" />
                 <span>Upload logo</span>
-                <small>PNG or JPG, up to 2.5 MB</small>
+                <small>PNG, JPG, or WebP, up to 2.5 MB</small>
               </label>
             )}
             <input

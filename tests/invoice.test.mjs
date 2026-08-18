@@ -8,6 +8,7 @@ import {
   getAccentInkColor,
   getReadableAccentColor,
   makeLineItem,
+  normalizeHexColorInput,
   normalizeInvoice,
   sanitizeFilenamePart,
 } from "../src/lib/invoice.js";
@@ -102,6 +103,15 @@ test("accent color helpers preserve readable invoice text", () => {
   assert.equal(getAccentInkColor("#808080"), "#000000");
   assert.equal(getReadableAccentColor("#2563EB"), "#2563EB");
   assert.notEqual(getReadableAccentColor("#FFFFCC"), "#FFFFCC");
+});
+
+test("normalizeHexColorInput accepts canonical HEX colors only", () => {
+  assert.equal(normalizeHexColorInput(" #0f766e "), "#0F766E");
+  assert.equal(normalizeHexColorInput("abcdef"), "#ABCDEF");
+  assert.equal(normalizeHexColorInput("#123"), null);
+  assert.equal(normalizeHexColorInput("#12345678"), null);
+  assert.equal(normalizeHexColorInput("#12GG56"), null);
+  assert.equal(normalizeHexColorInput(""), null);
 });
 
 test("calculateInvoice uses HALF_UP rounding and allocates discounts proportionally", () => {
