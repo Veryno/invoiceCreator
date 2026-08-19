@@ -1,6 +1,6 @@
 {
   "name": "invoice-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A private, offline-first desktop invoice creator with professional PDF export.",
   "private": true,
   "author": {
@@ -15,7 +15,7 @@
     "desktop:dev": "concurrently -k -s first \"vite --host 0.0.0.0\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs src/components/workspace/workspaceData.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "verify:update-assets": "node scripts/verify-windows-update-assets.mjs",
     "pack": "npm run build && electron-builder --config electron-builder.config.cjs --dir",

@@ -20,7 +20,13 @@ function TextAreaField({ label, className = "", ...inputProps }) {
   );
 }
 
-export function InvoiceHeaderForm({ invoice, updateField }) {
+export function InvoiceHeaderForm({
+  invoice,
+  updateField,
+  customers = [],
+  selectedCustomerId = "",
+  onSelectCustomer,
+}) {
   function handleLogo(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -121,6 +127,21 @@ export function InvoiceHeaderForm({ invoice, updateField }) {
         <fieldset className="form-group customer-fields">
           <legend>Bill to</legend>
           <div className="field-grid field-grid--two">
+            {customers.length > 0 && onSelectCustomer ? (
+              <label className="form-field field-span-two" htmlFor="saved-customer">
+                <span>Saved customer</span>
+                <select
+                  id="saved-customer"
+                  value={selectedCustomerId || ""}
+                  onChange={(event) => onSelectCustomer(event.target.value)}
+                >
+                  <option value="">One-time customer</option>
+                  {customers.map((customer) => (
+                    <option value={customer.id} key={customer.id}>{customer.name}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <Field
               label="Customer or company"
               name="customer-name"
@@ -207,6 +228,19 @@ export function InvoiceHeaderForm({ invoice, updateField }) {
                 <option value="EUR">EUR — Euro</option>
                 <option value="GBP">GBP — Pound Sterling</option>
                 <option value="AUD">AUD — Australian Dollar</option>
+              </select>
+            </label>
+            <label className="form-field" htmlFor="invoice-status">
+              <span>Status</span>
+              <select
+                id="invoice-status"
+                value={invoice.meta.status || "draft"}
+                onChange={(event) => updateField("meta.status", event.target.value)}
+              >
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="paid">Paid</option>
+                <option value="void">Void</option>
               </select>
             </label>
           </div>
