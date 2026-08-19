@@ -12,6 +12,7 @@ const {
 } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { createUpdateManager } = require("./update-manager.cjs");
+const { createWorkspaceStore } = require("./workspace-store.cjs");
 
 const APP_NAME = "Invoice Studio";
 const APP_ID = "com.invoicestudio.desktop";
@@ -20,6 +21,8 @@ const APP_ORIGIN = `${APP_SCHEME}://app`;
 const CLIENT_ROOT = path.resolve(__dirname, "..", "dist", "client");
 const MAX_SUGGESTED_NAME_LENGTH = 180;
 const MAX_TEXT_FILE_BYTES = 50 * 1024 * 1024;
+const CLOSE_SAVE_TIMEOUT_MS = 15_000;
+const CLOSE_APPROVAL_TIMEOUT_MS = 30_000;
 
 const CONTENT_TYPES = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -48,6 +51,12 @@ const IPC_CHANNELS = Object.freeze({
   checkForUpdates: "invoice-desktop:check-for-updates",
   downloadUpdate: "invoice-desktop:download-update",
   restartAndInstall: "invoice-desktop:restart-and-install",
+  getWorkspace: "invoice-desktop:get-workspace",
+  saveWorkspace: "invoice-desktop:save-workspace",
+  flushWorkspace: "invoice-desktop:flush-workspace",
+  closeSaveRequested: "invoice-desktop:close-save-requested",
+  closeSaveComplete: "invoice-desktop:close-save-complete",
+  closeSaveReleased: "invoice-desktop:close-save-released",
 });
 
 const PDF_PAGE_SIZES = new Map([
@@ -57,6 +66,11 @@ const PDF_PAGE_SIZES = new Map([
 
 let mainWindow = null;
 let updateManager = null;
+let workspaceStore = null;
+let pendingCloseSave = null;
+let closeOperation = null;
+let approvedClose = null;
+let heldCloseSaveRequest = null;
 const hardenedSessions = new WeakSet();
 
 protocol.registerSchemesAsPrivileged([
@@ -241,6 +255,228 @@ function requireUpdateManager() {
   return updateManager;
 }
 
+function requireWorkspaceStore() {
+  if (!workspaceStore) {
+    throw new Error("The local workspace is still starting. Try again in a moment.");
+  }
+  return workspaceStore;
+}
+
+function cleanCloseSaveError(error) {
+  const message = error instanceof Error ? error.message : String(error || "Unknown save error");
+  return message
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 400) || "Invoice Studio could not confirm that the workspace was saved.";
+}
+
+function settlePendingCloseSave(result) {
+  const pending = pendingCloseSave;
+  if (!pending) return false;
+
+  pendingCloseSave = null;
+  clearTimeout(pending.timeout);
+  pending.resolve({
+    ...result,
+    requestId: pending.requestId,
+    reason: pending.reason,
+    webContents: pending.webContents,
+  });
+  return true;
+}
+
+function releaseHeldCloseSave() {
+  const held = heldCloseSaveRequest;
+  heldCloseSaveRequest = null;
+  if (!held || held.webContents.isDestroyed()) return;
+
+  try {
+    held.webContents.send(IPC_CHANNELS.closeSaveReleased, {
+      requestId: held.requestId,
+      reason: held.reason,
+    });
+  } catch (error) {
+    console.warn("Unable to release the renderer close save lock:", error);
+  }
+}
+
+function failPendingCloseSaveFor(webContents, message) {
+  if (!pendingCloseSave || pendingCloseSave.webContents !== webContents) return;
+  settlePendingCloseSave({ ok: false, kind: "renderer", message });
+}
+
+function requestRendererCloseSave(targetWindow, reason) {
+  if (
+    !targetWindow
+    || targetWindow.isDestroyed()
+    || targetWindow.webContents.isDestroyed()
+  ) {
+    return Promise.resolve({
+      ok: false,
+      kind: "renderer",
+      message: "The application window is no longer available to save its changes.",
+    });
+  }
+
+  if (pendingCloseSave) {
+    return Promise.resolve({
+      ok: false,
+      kind: "busy",
+      message: "Another close save request is already in progress.",
+    });
+  }
+
+  const requestId = crypto.randomUUID();
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      if (pendingCloseSave?.requestId !== requestId) return;
+      settlePendingCloseSave({
+        ok: false,
+        kind: "timeout",
+        message: "The application did not confirm that its latest changes were saved in time.",
+      });
+    }, CLOSE_SAVE_TIMEOUT_MS);
+
+    pendingCloseSave = {
+      requestId,
+      reason,
+      resolve,
+      timeout,
+      webContents: targetWindow.webContents,
+    };
+    heldCloseSaveRequest = {
+      requestId,
+      reason,
+      webContents: targetWindow.webContents,
+    };
+
+    try {
+      targetWindow.webContents.send(IPC_CHANNELS.closeSaveRequested, {
+        requestId,
+        reason,
+      });
+    } catch (error) {
+      settlePendingCloseSave({
+        ok: false,
+        kind: "renderer",
+        message: cleanCloseSaveError(error),
+      });
+    }
+  });
+}
+
+async function askToRetryCloseSave(targetWindow, failure) {
+  if (!targetWindow || targetWindow.isDestroyed()) return false;
+
+  const detail = failure.kind === "timeout"
+    ? "Invoice Studio will stay open because it did not receive a save confirmation. Try again after checking the save status, or keep the app open so no changes are discarded."
+    : `Invoice Studio will stay open so no changes are discarded. ${cleanCloseSaveError(failure.message)}`;
+  const result = await dialog.showMessageBox(targetWindow, {
+    type: "warning",
+    title: "Changes were not confirmed saved",
+    message: "Invoice Studio could not safely close yet.",
+    detail,
+    buttons: ["Try saving again", "Keep Invoice Studio open"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+
+  return result.response === 0;
+}
+
+async function confirmRendererSavedBeforeClose(targetWindow, reason) {
+  while (targetWindow && !targetWindow.isDestroyed()) {
+    let result = await requestRendererCloseSave(targetWindow, reason);
+
+    if (result.ok) {
+      try {
+        await requireWorkspaceStore().flush();
+      } catch (error) {
+        result = {
+          ok: false,
+          kind: "storage",
+          message: `The local workspace could not be flushed to disk. ${cleanCloseSaveError(error)}`,
+        };
+      }
+    }
+
+    if (result.ok) return true;
+    if (!await askToRetryCloseSave(targetWindow, result)) {
+      releaseHeldCloseSave();
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function approveNextCloseFor(targetWindow) {
+  if (approvedClose?.timeout) clearTimeout(approvedClose.timeout);
+
+  const approval = { targetWindow, timeout: null };
+  approval.timeout = setTimeout(() => {
+    if (approvedClose !== approval) return;
+    approvedClose = null;
+    releaseHeldCloseSave();
+  }, CLOSE_APPROVAL_TIMEOUT_MS);
+  approval.timeout.unref?.();
+  approvedClose = approval;
+}
+
+function consumeCloseApproval(targetWindow) {
+  if (!approvedClose || approvedClose.targetWindow !== targetWindow) return false;
+  clearTimeout(approvedClose.timeout);
+  approvedClose = null;
+  heldCloseSaveRequest = null;
+  return true;
+}
+
+function revokeCloseApproval(targetWindow) {
+  if (approvedClose?.targetWindow === targetWindow) {
+    clearTimeout(approvedClose.timeout);
+    approvedClose = null;
+  }
+  releaseHeldCloseSave();
+}
+
+function beginCloseOperation(reason, onConfirmed) {
+  if (closeOperation) return closeOperation.promise;
+
+  const targetWindow = mainWindow;
+  if (!targetWindow || targetWindow.isDestroyed()) {
+    return Promise.resolve(false);
+  }
+
+  const operation = (async () => {
+    const confirmed = await confirmRendererSavedBeforeClose(targetWindow, reason);
+    if (!confirmed) return false;
+    await onConfirmed(targetWindow);
+    return true;
+  })();
+  closeOperation = { promise: operation, reason };
+  operation.then(
+    () => {
+      if (closeOperation?.promise === operation) closeOperation = null;
+    },
+    () => {
+      if (closeOperation?.promise === operation) closeOperation = null;
+    },
+  );
+  return operation;
+}
+
+function reportUnexpectedCloseError(error) {
+  console.error("Unable to safely close Invoice Studio:", error);
+  revokeCloseApproval(mainWindow);
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  dialog.showErrorBox(
+    "Invoice Studio is staying open",
+    "The latest changes could not be confirmed saved. Invoice Studio will remain open so your data is not discarded.",
+  );
+}
+
 function registerApplicationProtocol() {
   protocol.handle(APP_SCHEME, async (request) => {
     if (request.method !== "GET") {
@@ -295,6 +531,39 @@ function registerApplicationProtocol() {
 }
 
 function registerIpcHandlers() {
+  ipcMain.on(IPC_CHANNELS.closeSaveComplete, (event, payload) => {
+    try {
+      assertTrustedSender(event);
+    } catch (error) {
+      console.warn("Rejected an untrusted close save acknowledgement:", error);
+      return;
+    }
+
+    const pending = pendingCloseSave;
+    if (!pending || event.sender !== pending.webContents) return;
+    if (
+      !isRecord(payload)
+      || typeof payload.requestId !== "string"
+      || payload.requestId !== pending.requestId
+      || !["saved", "failed"].includes(payload.status)
+    ) {
+      return;
+    }
+
+    if (payload.status === "saved") {
+      settlePendingCloseSave({ ok: true, kind: "saved" });
+      return;
+    }
+
+    settlePendingCloseSave({
+      ok: false,
+      kind: "renderer",
+      message: typeof payload.errorMessage === "string"
+        ? cleanCloseSaveError(payload.errorMessage)
+        : "The application reported that its latest changes could not be saved.",
+    });
+  });
+
   ipcMain.handle(IPC_CHANNELS.exportPdf, async (event, payload) => {
     assertTrustedSender(event);
 
@@ -371,6 +640,30 @@ function registerIpcHandlers() {
     return { canceled: false, filePath: result.filePath };
   });
 
+  ipcMain.handle(IPC_CHANNELS.getWorkspace, async (event) => {
+    assertTrustedSender(event);
+    return requireWorkspaceStore().getWorkspace();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.saveWorkspace, async (event, payload) => {
+    assertTrustedSender(event);
+    if (!isRecord(payload) || !isRecord(payload.workspace)) {
+      throw new TypeError("Workspace save requires a workspace object.");
+    }
+    if (!Number.isSafeInteger(payload.expectedRevision) || payload.expectedRevision < 0) {
+      throw new TypeError("Workspace save expectedRevision must be a non-negative integer.");
+    }
+    return requireWorkspaceStore().commitWorkspace(
+      payload.workspace,
+      payload.expectedRevision,
+    );
+  });
+
+  ipcMain.handle(IPC_CHANNELS.flushWorkspace, async (event) => {
+    assertTrustedSender(event);
+    return requireWorkspaceStore().flush();
+  });
+
   ipcMain.handle(IPC_CHANNELS.getUpdateState, (event) => {
     assertTrustedSender(event);
     return requireUpdateManager().getState();
@@ -386,9 +679,27 @@ function registerIpcHandlers() {
     return requireUpdateManager().downloadUpdate();
   });
 
-  ipcMain.handle(IPC_CHANNELS.restartAndInstall, (event) => {
+  ipcMain.handle(IPC_CHANNELS.restartAndInstall, async (event) => {
     assertTrustedSender(event);
-    return requireUpdateManager().restartAndInstall();
+    const manager = requireUpdateManager();
+    if (manager.getState().status !== "ready") {
+      throw new Error("No downloaded update is ready to install.");
+    }
+    if (closeOperation) {
+      throw new Error("Invoice Studio is already preparing to close.");
+    }
+
+    let updateResult = { accepted: false };
+    const confirmed = await beginCloseOperation("restart-update", async (targetWindow) => {
+      approveNextCloseFor(targetWindow);
+      try {
+        updateResult = manager.restartAndInstall();
+      } catch (error) {
+        revokeCloseApproval(targetWindow);
+        throw error;
+      }
+    });
+    return confirmed ? updateResult : { accepted: false };
   });
 }
 
@@ -450,28 +761,59 @@ async function createMainWindow() {
       navigateOnDragDrop: false,
     },
   });
+  const createdWindow = mainWindow;
+  const rendererWebContents = createdWindow.webContents;
 
-  denyRendererPrivileges(mainWindow.webContents);
+  denyRendererPrivileges(rendererWebContents);
 
-  mainWindow.once("ready-to-show", () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
+  createdWindow.once("ready-to-show", () => {
+    if (!createdWindow.isDestroyed()) {
+      createdWindow.show();
     }
   });
 
-  mainWindow.on("closed", () => {
-    mainWindow = null;
+  createdWindow.on("close", (event) => {
+    if (consumeCloseApproval(createdWindow)) return;
+
+    event.preventDefault();
+    if (closeOperation) return;
+    void beginCloseOperation("window-close", async (targetWindow) => {
+      approveNextCloseFor(targetWindow);
+      targetWindow.close();
+    }).catch(reportUnexpectedCloseError);
   });
 
-  mainWindow.webContents.once("did-finish-load", () => {
+  createdWindow.on("closed", () => {
+    failPendingCloseSaveFor(
+      rendererWebContents,
+      "The application window closed before its save could be confirmed.",
+    );
+    if (approvedClose?.targetWindow === createdWindow) {
+      clearTimeout(approvedClose.timeout);
+      approvedClose = null;
+    }
+    if (heldCloseSaveRequest?.webContents === rendererWebContents) {
+      heldCloseSaveRequest = null;
+    }
+    if (mainWindow === createdWindow) mainWindow = null;
+  });
+
+  rendererWebContents.on("render-process-gone", () => {
+    failPendingCloseSaveFor(
+      rendererWebContents,
+      "The application window stopped responding before its save could be confirmed.",
+    );
+  });
+
+  rendererWebContents.once("did-finish-load", () => {
     if (updateManager) sendUpdateState(updateManager.getState());
   });
 
   const developmentUrl = getDevelopmentUrl();
   if (developmentUrl) {
-    await mainWindow.loadURL(developmentUrl);
+    await createdWindow.loadURL(developmentUrl);
   } else {
-    await mainWindow.loadURL(`${APP_ORIGIN}/index.html`);
+    await createdWindow.loadURL(`${APP_ORIGIN}/index.html`);
   }
 }
 
@@ -480,22 +822,34 @@ registerIpcHandlers();
 app.whenReady().then(async () => {
   try {
     registerApplicationProtocol();
+    workspaceStore = createWorkspaceStore({
+      directoryPath: app.getPath("userData"),
+    });
+    await workspaceStore.getWorkspace();
     updateManager = createUpdateManager({ app, autoUpdater });
     updateManager.onState(sendUpdateState);
     await createMainWindow();
     updateManager.start();
   } catch (error) {
     console.error("Unable to start Invoice Studio:", error);
+    const startupMessage = error?.code === "WORKSPACE_VERSION_UNSUPPORTED"
+      ? "Your local workspace was created by a newer version of Invoice Studio. Install the latest version to open it. Your workspace files were preserved."
+      : error?.code === "WORKSPACE_VALIDATION_FAILED"
+        ? "Your local workspace and its backup could not be read. The original files were preserved. Restore a valid backup or contact support before making further changes."
+        : "The application files could not be loaded. Reinstall the application and try again.";
     dialog.showErrorBox(
       `${APP_NAME} could not start`,
-      "The application files could not be loaded. Reinstall the application and try again.",
+      startupMessage,
     );
     app.quit();
   }
 });
 
-app.on("before-quit", () => {
+app.on("will-quit", () => {
   updateManager?.stop();
+  workspaceStore?.flush().catch((error) => {
+    console.error("Unable to flush Invoice Studio workspace:", error);
+  });
 });
 
 app.on("activate", () => {

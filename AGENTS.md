@@ -17,3 +17,6 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - The product is offline-first and single-user. Do not add cloud sync, accounts, analytics, or external data transmission without an explicit request.
 - Keep the public README concise and conversational. Lead with the installer download, keep developer setup brief, and leave maintainer-only release, signing, and update details out of it.
 - Unsigned GitHub installers are acceptable for the initial personal Windows release. Preserve optional Authenticode signing and signature verification for future releases.
+- Overview, Customers, and Templates should be complete working product areas, not disabled navigation or decorative placeholder screens. Their data must come from the local invoice library.
+- Include a quick, skippable, resumable first-run onboarding flow for company/logo/brand setup, invoice defaults and default template, the first customer, and the first invoice. Keep it available later from Overview or Settings.
+- Use current Excel and QuickBooks interaction patterns as workflow inspiration for tables, imports, customer management, and dashboards while preserving Invoice Studio's original visual identity.

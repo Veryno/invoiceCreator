@@ -324,6 +324,21 @@ export function normalizeInvoice(input = {}) {
   const sourceLineItems = Array.isArray(source.lineItems) ? source.lineItems : defaults.lineItems;
   const discountType = adjustments.discountType === "fixed" ? "fixed" : "percent";
   const accentColor = asString(design.accentColor, defaults.design.accentColor);
+  const usedLineIds = new Set();
+  const lineItems = sourceLineItems.map((lineItem, index) => {
+    const sourceId = asString(lineItem?.id, `line-${index + 1}`) || `line-${index + 1}`;
+    let id = sourceId;
+    let suffix = 2;
+    while (usedLineIds.has(id)) {
+      id = `${sourceId}-${suffix}`;
+      suffix += 1;
+    }
+    usedLineIds.add(id);
+    return makeLineItem({
+      ...(lineItem && typeof lineItem === "object" ? lineItem : {}),
+      id,
+    });
+  });
 
   return {
     company: {
@@ -351,12 +366,7 @@ export function normalizeInvoice(input = {}) {
       locale: normalizedLocale(meta.locale, defaults.meta.locale),
       status: asString(meta.status, defaults.meta.status),
     },
-    lineItems: sourceLineItems.map((lineItem, index) =>
-      makeLineItem({
-        ...(lineItem && typeof lineItem === "object" ? lineItem : {}),
-        id: asString(lineItem?.id, `line-${index + 1}`),
-      }),
-    ),
+    lineItems,
     adjustments: {
       discountType,
       discountValue: asNumber(adjustments.discountValue, defaults.adjustments.discountValue),
@@ -447,6 +457,54 @@ export function formatMoney(amount, currency = "USD", locale = "en-US") {
     minimumFractionDigits: MONEY_PLACES,
     maximumFractionDigits: MONEY_PLACES,
   }).format(value);
+}
+
+/**
+ * Returns actionable issues that should be resolved before a document is
+ * presented as a finished PDF. Drafts may remain incomplete while editing.
+ */
+export function validateInvoiceForExport(invoice) {
+  const normalized = normalizeInvoice(invoice);
+  const issues = [];
+  const requireText = (path, label, value) => {
+    if (!String(value || "").trim()) issues.push({ path, label, message: `${label} is required.` });
+  };
+
+  requireText("company.name", "Company name", normalized.company.name);
+  requireText("customer.name", "Customer name", normalized.customer.name);
+  requireText("meta.number", "Invoice number", normalized.meta.number);
+  requireText("meta.issueDate", "Issue date", normalized.meta.issueDate);
+  requireText("meta.dueDate", "Due date", normalized.meta.dueDate);
+
+  if (!normalized.lineItems.length) {
+    issues.push({ path: "lineItems", label: "Line item", message: "Add at least one line item." });
+  } else {
+    normalized.lineItems.forEach((line, index) => {
+      if (!String(line.item || line.description || "").trim()) {
+        issues.push({
+          path: `lineItems.${index}.description`,
+          label: `Line ${index + 1}`,
+          message: `Line ${index + 1} needs a product, service, or description.`,
+        });
+      }
+      if (!Number.isFinite(Number(line.quantity)) || Number(line.quantity) === 0) {
+        issues.push({
+          path: `lineItems.${index}.quantity`,
+          label: `Line ${index + 1} quantity`,
+          message: `Line ${index + 1} needs a non-zero quantity.`,
+        });
+      }
+      if (!Number.isFinite(Number(line.rate))) {
+        issues.push({
+          path: `lineItems.${index}.rate`,
+          label: `Line ${index + 1} rate`,
+          message: `Line ${index + 1} needs a valid rate.`,
+        });
+      }
+    });
+  }
+
+  return issues;
 }
 
 /**

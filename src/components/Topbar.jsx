@@ -1,5 +1,6 @@
 import {
   ArrowCounterClockwise,
+  ArrowLeft,
   Check,
   DownloadSimple,
   Eye,
@@ -34,18 +35,25 @@ export function Topbar({
   onExport,
   onNew,
   onCustomize,
+  onBack,
   isExporting,
+  saveStatus = "saved",
 }) {
   return (
     <header className="topbar">
       <div className="topbar-title">
+        {onBack ? (
+          <button className="topbar-back" type="button" onClick={onBack} aria-label="Back to invoice library" title="Back to invoice library">
+            <ArrowLeft size={18} weight="bold" aria-hidden="true" />
+          </button>
+        ) : null}
         <div>
           <div className="eyebrow">Invoice Studio</div>
           <h1>Invoice {invoiceNumber || "Draft"}</h1>
         </div>
-        <div className="autosave-status" role="status">
+        <div className={`autosave-status autosave-status--${saveStatus}`} role="status">
           <Check size={14} weight="bold" aria-hidden="true" />
-          Saved locally {savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          {saveStatus === "saving" ? "Saving locally…" : saveStatus === "error" ? "Save needs attention" : `Saved locally ${savedAt?.toLocaleTimeString?.([], { hour: "numeric", minute: "2-digit" }) || "just now"}`}
         </div>
       </div>
 

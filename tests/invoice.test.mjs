@@ -11,6 +11,7 @@ import {
   normalizeHexColorInput,
   normalizeInvoice,
   sanitizeFilenamePart,
+  validateInvoiceForExport,
 } from "../src/lib/invoice.js";
 
 test("createDefaultInvoice returns independent, realistic drafts", () => {
@@ -75,6 +76,21 @@ test("normalizeInvoice does not inject sample financial values into partial inpu
   assert.equal(invoice.adjustments.shipping, 0);
   assert.equal(invoice.adjustments.deposit, 0);
   assert.equal(invoice.adjustments.taxRate, 0);
+});
+
+test("normalizeInvoice repairs duplicate line identities deterministically", () => {
+  const invoice = normalizeInvoice({
+    lineItems: [
+      { id: "line:shared", description: "First" },
+      { id: "line:shared", description: "Second" },
+      { id: "line:shared", description: "Third" },
+    ],
+  });
+
+  assert.deepEqual(
+    invoice.lineItems.map(({ id }) => id),
+    ["line:shared", "line:shared-2", "line:shared-3"],
+  );
 });
 
 test("makeLineItem provides editable defaults without discarding overrides", () => {
@@ -172,4 +188,20 @@ test("sanitizeFilenamePart removes filesystem-reserved characters", () => {
   assert.equal(sanitizeFilenamePart(" Acme / West: INV*001? "), "Acme - West- INV-001");
   assert.equal(sanitizeFilenamePart("..."), "invoice");
   assert.equal(sanitizeFilenamePart("CON"), "_CON");
+});
+
+test("validateInvoiceForExport keeps drafts editable but blocks incomplete finished PDFs", () => {
+  const issues = validateInvoiceForExport(normalizeInvoice({ lineItems: [makeLineItem()] }));
+  assert.deepEqual(
+    issues.map(({ path }) => path),
+    [
+      "company.name",
+      "customer.name",
+      "meta.number",
+      "lineItems.0.description",
+    ],
+  );
+
+  const complete = createDefaultInvoice();
+  assert.deepEqual(validateInvoiceForExport(complete), []);
 });

@@ -10,9 +10,9 @@ import {
 
 const navigation = [
   { id: "overview", label: "Overview", icon: House },
-  { id: "invoices", label: "Invoices", icon: FileText, enabled: true },
+  { id: "invoices", label: "Invoices", icon: FileText },
   { id: "customers", label: "Customers", icon: UsersThree },
-  { id: "company", label: "Company", icon: Buildings, enabled: true },
+  { id: "company", label: "Company", icon: Buildings },
   { id: "templates", label: "Templates", icon: Palette },
 ];
 
@@ -24,18 +24,17 @@ export function Sidebar({ activePage = "invoices", onNavigate, onSettings }) {
       </div>
 
       <nav className="sidebar-nav">
-        {navigation.map(({ id, label, icon: Icon, enabled }) => {
+        {navigation.map(({ id, label, icon: Icon }) => {
           const active = id === activePage;
           return (
             <button
               className={`sidebar-button${active ? " is-active" : ""}`}
               type="button"
               aria-current={active ? "page" : undefined}
-              aria-disabled={!enabled || undefined}
               aria-label={label}
-              title={enabled ? label : `${label} — coming soon`}
+              title={label}
               key={id}
-              onClick={enabled ? () => onNavigate?.(id) : undefined}
+              onClick={() => onNavigate?.(id)}
             >
               <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
               <span>{label}</span>
@@ -45,10 +44,11 @@ export function Sidebar({ activePage = "invoices", onNavigate, onSettings }) {
       </nav>
 
       <button
-        className="sidebar-button sidebar-settings"
+        className={`sidebar-button sidebar-settings${activePage === "settings" ? " is-active" : ""}`}
         type="button"
-        aria-label="Settings and software updates"
-        title="Settings and software updates"
+        aria-current={activePage === "settings" ? "page" : undefined}
+        aria-label="Settings"
+        title="Settings"
         onClick={onSettings}
       >
         <GearSix size={22} aria-hidden="true" />
