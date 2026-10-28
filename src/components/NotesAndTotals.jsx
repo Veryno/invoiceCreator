@@ -1,5 +1,6 @@
 import { Info } from "@phosphor-icons/react";
 import { calculateInvoice, formatMoney } from "../lib/invoice.js";
+import { NumberField } from "./NumberField.jsx";
 
 function MoneyRow({ label, value, strong = false, muted = false }) {
   return (
@@ -29,7 +30,7 @@ export function NotesAndTotals({ invoice, updateField }) {
           </div>
         </div>
         <label className="form-field" htmlFor="invoice-notes">
-          <span>Note to customer</span>
+          <span>Message on invoice</span>
           <textarea
             id="invoice-notes"
             rows="3"
@@ -56,13 +57,10 @@ export function NotesAndTotals({ invoice, updateField }) {
         <div className="adjustment-row">
           <label htmlFor="invoice-discount">Discount</label>
           <div className="adjustment-control">
-            <input
+            <NumberField
               id="invoice-discount"
-              type="number"
-              min="0"
-              step="0.01"
               value={invoice.adjustments.discountValue}
-              onChange={(event) => updateField("adjustments.discountValue", event.target.value)}
+              onValue={(value) => updateField("adjustments.discountValue", value)}
             />
             <select
               aria-label="Discount type"
@@ -77,31 +75,12 @@ export function NotesAndTotals({ invoice, updateField }) {
         {totals.discount > 0 && <MoneyRow label="Discount applied" value={`−${money(totals.discount)}`} muted />}
 
         <div className="adjustment-row">
-          <label htmlFor="invoice-shipping">Shipping / fees</label>
-          <div className="money-input">
-            <span aria-hidden="true">{currencySymbol}</span>
-            <input
-              id="invoice-shipping"
-              type="number"
-              min="0"
-              step="0.01"
-              value={invoice.adjustments.shipping}
-              onChange={(event) => updateField("adjustments.shipping", event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="adjustment-row">
           <label htmlFor="invoice-tax-rate">Tax rate</label>
           <div className="suffix-input">
-            <input
+            <NumberField
               id="invoice-tax-rate"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
               value={invoice.adjustments.taxRate}
-              onChange={(event) => updateField("adjustments.taxRate", event.target.value)}
+              onValue={(value) => updateField("adjustments.taxRate", value)}
             />
             <span aria-hidden="true">%</span>
           </div>
@@ -110,16 +89,13 @@ export function NotesAndTotals({ invoice, updateField }) {
         <MoneyRow label="Invoice total" value={money(totals.total)} strong />
 
         <div className="adjustment-row">
-          <label htmlFor="invoice-deposit">Deposit / payment</label>
+          <label htmlFor="invoice-deposit">Deposit received</label>
           <div className="money-input">
             <span aria-hidden="true">{currencySymbol}</span>
-            <input
+            <NumberField
               id="invoice-deposit"
-              type="number"
-              min="0"
-              step="0.01"
               value={invoice.adjustments.deposit}
-              onChange={(event) => updateField("adjustments.deposit", event.target.value)}
+              onValue={(value) => updateField("adjustments.deposit", value)}
             />
           </div>
         </div>

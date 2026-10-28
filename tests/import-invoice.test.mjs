@@ -172,10 +172,14 @@ test("round-trips the app's content, adjustments, and design sections", async ()
   assert.deepEqual(result.invoicePatch.adjustments, {
     discountType: "fixed",
     discountValue: 125.5,
-    shipping: 20,
     deposit: 50,
     taxRate: 13,
   });
+  // Shipping is no longer a separate total; it arrives as a non-taxable fee line.
+  assert.deepEqual(
+    result.invoicePatch.lineItems.map(({ item, rate, taxable }) => [item, rate, taxable]),
+    [["Service", 300, true], ["Fees", 20, false]],
+  );
   assert.deepEqual(result.invoicePatch.content, {
     notes: "Saved note",
     paymentInstructions: "Wire transfer",

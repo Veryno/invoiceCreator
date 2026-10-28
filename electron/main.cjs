@@ -8,9 +8,13 @@ const {
   BrowserWindow,
   dialog,
   ipcMain,
+  Menu,
   protocol,
+  safeStorage,
 } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const nodemailer = require("nodemailer");
+const { createEmailService } = require("./email-service.cjs");
 const { createUpdateManager } = require("./update-manager.cjs");
 const { createWorkspaceStore } = require("./workspace-store.cjs");
 
@@ -57,6 +61,10 @@ const IPC_CHANNELS = Object.freeze({
   closeSaveRequested: "invoice-desktop:close-save-requested",
   closeSaveComplete: "invoice-desktop:close-save-complete",
   closeSaveReleased: "invoice-desktop:close-save-released",
+  getEmailSettings: "invoice-desktop:get-email-settings",
+  saveEmailSettings: "invoice-desktop:save-email-settings",
+  verifyEmailSettings: "invoice-desktop:verify-email-settings",
+  sendInvoiceEmail: "invoice-desktop:send-invoice-email",
 });
 
 const PDF_PAGE_SIZES = new Map([
@@ -67,6 +75,7 @@ const PDF_PAGE_SIZES = new Map([
 let mainWindow = null;
 let updateManager = null;
 let workspaceStore = null;
+let emailService = null;
 let pendingCloseSave = null;
 let closeOperation = null;
 let approvedClose = null;
@@ -253,6 +262,11 @@ function requireUpdateManager() {
     throw new Error("The update service is still starting. Try again in a moment.");
   }
   return updateManager;
+}
+
+function requireEmailService() {
+  if (!emailService) throw new Error("Email is still starting. Try again in a moment.");
+  return emailService;
 }
 
 function requireWorkspaceStore() {
@@ -664,6 +678,45 @@ function registerIpcHandlers() {
     return requireWorkspaceStore().flush();
   });
 
+  ipcMain.handle(IPC_CHANNELS.getEmailSettings, async (event) => {
+    assertTrustedSender(event);
+    return requireEmailService().getSettings();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.saveEmailSettings, async (event, payload) => {
+    assertTrustedSender(event);
+    if (!isRecord(payload)) throw new TypeError("Email settings must be an object.");
+    return requireEmailService().saveSettings(payload);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.verifyEmailSettings, async (event) => {
+    assertTrustedSender(event);
+    return requireEmailService().verify();
+  });
+
+  // Renders the invoice currently staged in the print root to a PDF in memory
+  // and sends it; nothing is written to disk.
+  ipcMain.handle(IPC_CHANNELS.sendInvoiceEmail, async (event, payload) => {
+    assertTrustedSender(event);
+    if (!isRecord(payload)) throw new TypeError("Invoice email options must be an object.");
+    const service = requireEmailService();
+    service.parseRecipients(payload.to, "recipient");
+    let filename = sanitizeSuggestedName(payload.suggestedName, "invoice.pdf");
+    if (!filename.toLowerCase().endsWith(".pdf")) filename += ".pdf";
+    const pdf = await event.sender.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true,
+      pageSize: normalizePageSize(payload.pageSize),
+    });
+    return service.send({
+      to: payload.to,
+      cc: payload.cc,
+      subject: payload.subject,
+      message: payload.message,
+      attachment: { filename, content: Buffer.from(pdf) },
+    });
+  });
+
   ipcMain.handle(IPC_CHANNELS.getUpdateState, (event) => {
     assertTrustedSender(event);
     return requireUpdateManager().getState();
@@ -722,6 +775,46 @@ function denyRendererPrivileges(webContents) {
   webContents.on("will-attach-webview", (event) => event.preventDefault());
 }
 
+// Electron shows no menu on right-click by default, so build the familiar
+// editing menu (with spelling suggestions) for text fields and selections.
+function attachContextMenu(webContents) {
+  webContents.on("context-menu", (_event, params) => {
+    const { editFlags, isEditable, selectionText, misspelledWord, dictionarySuggestions } = params;
+    const hasSelection = Boolean(selectionText && selectionText.trim());
+    if (!isEditable && !hasSelection) return;
+
+    const template = [];
+    if (isEditable && misspelledWord) {
+      for (const suggestion of (dictionarySuggestions || []).slice(0, 5)) {
+        template.push({ label: suggestion, click: () => webContents.replaceMisspelling(suggestion) });
+      }
+      if (!dictionarySuggestions?.length) template.push({ label: "No spelling suggestions", enabled: false });
+      template.push({
+        label: "Add to dictionary",
+        click: () => webContents.session.addWordToSpellCheckerDictionary(misspelledWord),
+      });
+      template.push({ type: "separator" });
+    }
+    if (isEditable) {
+      template.push(
+        { role: "undo", enabled: editFlags.canUndo },
+        { role: "redo", enabled: editFlags.canRedo },
+        { type: "separator" },
+        { role: "cut", enabled: editFlags.canCut },
+        { role: "copy", enabled: editFlags.canCopy },
+        { role: "paste", enabled: editFlags.canPaste },
+        { role: "pasteAndMatchStyle", label: "Paste as plain text", enabled: editFlags.canPaste },
+        { role: "delete", enabled: editFlags.canDelete },
+        { type: "separator" },
+        { role: "selectAll", enabled: editFlags.canSelectAll },
+      );
+    } else {
+      template.push({ role: "copy", enabled: editFlags.canCopy }, { role: "selectAll" });
+    }
+    Menu.buildFromTemplate(template).popup({ window: BrowserWindow.fromWebContents(webContents) || undefined });
+  });
+}
+
 function getDevelopmentUrl() {
   const value = process.env.VITE_DEV_SERVER_URL;
   if (!value) {
@@ -765,6 +858,7 @@ async function createMainWindow() {
   const rendererWebContents = createdWindow.webContents;
 
   denyRendererPrivileges(rendererWebContents);
+  attachContextMenu(rendererWebContents);
 
   createdWindow.once("ready-to-show", () => {
     if (!createdWindow.isDestroyed()) {
@@ -826,6 +920,11 @@ app.whenReady().then(async () => {
       directoryPath: app.getPath("userData"),
     });
     await workspaceStore.getWorkspace();
+    emailService = createEmailService({
+      directoryPath: app.getPath("userData"),
+      safeStorage,
+      createTransport: (options) => nodemailer.createTransport(options),
+    });
     updateManager = createUpdateManager({ app, autoUpdater });
     updateManager.onState(sendUpdateState);
     await createMainWindow();

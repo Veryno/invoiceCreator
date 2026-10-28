@@ -1,4 +1,5 @@
 import {
+  ArrowSquareIn,
   ArrowSquareOut,
   ArrowsClockwise,
   CheckCircle,
@@ -24,6 +25,7 @@ import {
   numberingExample,
   TERM_OPTIONS,
 } from "./setupModel.js";
+import { EmailSettingsCard } from "../email/EmailSettingsCard.jsx";
 import "./setup.css";
 
 function formatBackupTime(value) {
@@ -64,6 +66,10 @@ export function SettingsWorkspace({
   onRestore,
   onOpenUpdates,
   onRestartOnboarding,
+  emailPreferences,
+  onUpdateEmailPreferences,
+  onEmailStatusChange,
+  onImportQuickBooks,
 }) {
   const [confirmRestart, setConfirmRestart] = useState(false);
   const restartButtonRef = useRef(null);
@@ -100,7 +106,7 @@ export function SettingsWorkspace({
         <CloudSlash size={22} weight="duotone" aria-hidden="true" />
         <div>
           <strong>Your invoice data stays on this device.</strong>
-          <span>No account or cloud sync is required. Internet access is only needed to check for and download app updates.</span>
+          <span>No account or cloud sync is required. Internet access is only used to send invoices you email and to check for app updates.</span>
         </div>
       </div>
 
@@ -220,6 +226,32 @@ export function SettingsWorkspace({
             />
           </div>
         </section>
+
+        {emailPreferences ? (
+          <EmailSettingsCard
+            emailPreferences={emailPreferences}
+            onUpdateEmailPreferences={onUpdateEmailPreferences}
+            onStatusChange={onEmailStatusChange}
+          />
+        ) : null}
+
+        {onImportQuickBooks ? (
+          <section className="setup-settings-card" aria-labelledby="settings-quickbooks-title">
+            <div className="setup-settings-card-heading">
+              <span><ArrowSquareIn size={20} weight="duotone" aria-hidden="true" /></span>
+              <div>
+                <h2 id="settings-quickbooks-title">Move from QuickBooks</h2>
+                <p>Bring in customers and past invoices from QuickBooks Online or Desktop export files.</p>
+              </div>
+            </div>
+            <div className="setup-settings-actions">
+              <button className="setup-button setup-button--primary" type="button" onClick={onImportQuickBooks}>
+                <ArrowSquareIn size={17} aria-hidden="true" />
+                Import from QuickBooks
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         <section className="setup-settings-card" aria-labelledby="settings-backup-title">
           <div className="setup-settings-card-heading">

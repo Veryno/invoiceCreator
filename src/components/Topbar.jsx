@@ -7,6 +7,7 @@ import {
   FileArrowDown,
   FloppyDisk,
   PaintBrush,
+  PaperPlaneTilt,
 } from "@phosphor-icons/react";
 
 function ToolbarButton({ children, icon: Icon, variant = "quiet", ...props }) {
@@ -35,6 +36,7 @@ export function Topbar({
   onExport,
   onNew,
   onCustomize,
+  onSend,
   onBack,
   isExporting,
   saveStatus = "saved",
@@ -76,9 +78,14 @@ export function Topbar({
         <ToolbarButton icon={PaintBrush} onClick={onCustomize} variant="mobile-only">
           Customize
         </ToolbarButton>
-        <ToolbarButton icon={DownloadSimple} onClick={onExport} variant="primary" disabled={isExporting}>
+        <ToolbarButton icon={DownloadSimple} onClick={onExport} variant={onSend ? "secondary" : "primary"} disabled={isExporting}>
           {isExporting ? "Creating…" : "Save PDF"}
         </ToolbarButton>
+        {onSend ? (
+          <ToolbarButton icon={PaperPlaneTilt} onClick={onSend} variant="primary">
+            Send
+          </ToolbarButton>
+        ) : null}
       </div>
     </header>
   );

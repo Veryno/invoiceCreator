@@ -32,11 +32,12 @@ export function InvoiceDocument({ invoice, id, className = "" }) {
       : "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   const accentInk = getAccentInkColor(invoice.design.accentColor);
   const readableAccent = getReadableAccentColor(invoice.design.accentColor);
+  const hasJobSite = Boolean(invoice.job.name || invoice.job.address || invoice.job.info);
 
   return (
     <article
       id={id}
-      className={`invoice-document invoice-document--${invoice.design.template} invoice-document--${paperSize.toLowerCase()} ${className}`}
+      className={`invoice-document invoice-document--${invoice.design.template}${hasJobSite ? " invoice-document--job" : ""} invoice-document--${paperSize.toLowerCase()} ${className}`}
       style={{
         "--invoice-accent": invoice.design.accentColor,
         "--invoice-accent-ink": accentInk,
@@ -77,6 +78,14 @@ export function InvoiceDocument({ invoice, id, className = "" }) {
           {invoice.customer.email && <span>{invoice.customer.email}</span>}
           {invoice.customer.phone && <span>{invoice.customer.phone}</span>}
         </div>
+        {hasJobSite ? (
+          <div className="document-job-site">
+            <p className="document-label">Job site</p>
+            {invoice.job.name && <h3>{invoice.job.name}</h3>}
+            <Address>{invoice.job.address}</Address>
+            {invoice.job.info && <span className="document-job-info">{invoice.job.info}</span>}
+          </div>
+        ) : null}
         <dl className="document-metadata">
           <div>
             <dt>Issue date</dt>
@@ -147,7 +156,6 @@ export function InvoiceDocument({ invoice, id, className = "" }) {
         <dl className="document-totals">
           <div><dt>Subtotal</dt><dd>{money(totals.subtotal)}</dd></div>
           {totals.discount > 0 && <div><dt>Discount</dt><dd>−{money(totals.discount)}</dd></div>}
-          {totals.shipping > 0 && <div><dt>Shipping / fees</dt><dd>{money(totals.shipping)}</dd></div>}
           <div><dt>Tax ({invoice.adjustments.taxRate || 0}%)</dt><dd>{money(totals.tax)}</dd></div>
           <div className="document-total"><dt>Total</dt><dd>{money(totals.total)}</dd></div>
           {totals.deposit > 0 && <div><dt>Payments</dt><dd>−{money(totals.deposit)}</dd></div>}

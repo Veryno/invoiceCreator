@@ -10,6 +10,7 @@ import {
 } from "react";
 import { CompanyProfile } from "./components/CompanyProfile.jsx";
 import { CustomizationPanel } from "./components/CustomizationPanel.jsx";
+import { SendInvoiceDialog } from "./components/email/SendInvoiceDialog.jsx";
 import { InvoiceDocument } from "./components/InvoiceDocument.jsx";
 import { InvoiceEditor } from "./components/InvoiceEditor.jsx";
 import { PreviewCanvas } from "./components/PreviewCanvas.jsx";
@@ -26,14 +27,18 @@ import {
   CustomersPage,
   InvoicesPage,
   OverviewPage,
+  ProductsPage,
 } from "./components/workspace/index.js";
 import { useAppUpdater } from "./hooks/useAppUpdater.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { useWorkspaceInvoiceDraft } from "./hooks/useWorkspaceInvoiceDraft.js";
 import {
   exportPdf,
+  getEmailSettings,
+  hasDesktopEmail,
   registerDesktopCloseSaveHandler,
   saveTextFile,
+  sendInvoiceEmail,
 } from "./lib/desktop.js";
 import {
   calculateInvoice,
@@ -56,6 +61,8 @@ import {
 
 const ImportWizard = lazy(() => import("./components/importing/ImportWizard.jsx")
   .then((module) => ({ default: module.ImportWizard })));
+const QuickBooksImportDialog = lazy(() => import("./components/importing/QuickBooksImportDialog.jsx")
+  .then((module) => ({ default: module.QuickBooksImportDialog })));
 
 const BUILTIN_PRESETS = [
   { id: "builtin:modern", name: "Modern", template: "modern" },
@@ -130,9 +137,10 @@ function buildInvoiceViewModels(workspace) {
 function pageTitle(page, number) {
   if (page === "invoice-editor") return `${number || "Draft"} · Invoice Studio`;
   const labels = {
-    overview: "Overview",
+    overview: "Dashboard",
     invoices: "Invoices",
     customers: "Customers",
+    products: "Products & services",
     company: "Company",
     templates: "Templates",
     settings: "Settings",
@@ -412,6 +420,9 @@ export function App() {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [lastBackupAt, setLastBackupAt] = useState(null);
+  const [quickBooksOpen, setQuickBooksOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [emailStatus, setEmailStatus] = useState({ available: hasDesktopEmail(), configured: false });
 
   const isPrintFixture = useMemo(
     () => new URLSearchParams(window.location.search).get("fixture") === "print",
@@ -438,6 +449,20 @@ export function App() {
   useEffect(() => {
     if (["available", "ready"].includes(updater.state.status)) setUpdatesOpen(true);
   }, [updater.state.status]);
+
+  const refreshEmailStatus = useCallback(async () => {
+    if (!hasDesktopEmail()) return;
+    try {
+      const result = await getEmailSettings();
+      if (result) setEmailStatus({ available: true, ...result });
+    } catch {
+      setEmailStatus({ available: true, configured: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshEmailStatus();
+  }, [refreshEmailStatus]);
 
   useEffect(() => {
     const root = document.getElementById("root");
@@ -551,6 +576,74 @@ export function App() {
       setToast({ type: "error", title: "Save failed", message: error?.message || "The invoice could not be saved before export." });
     }
   }, [draft.invoice, draft.recordId, draft.saveNow, exportInvoiceDocument]);
+
+  async function openSendDialog() {
+    try {
+      await draft.saveNow();
+    } catch {
+      // The dialog still opens; sending saves again first.
+    }
+    const issues = validateInvoiceForExport(draft.invoice);
+    if (issues.length) {
+      setToast({
+        type: "error",
+        title: "Finish the invoice before sending",
+        message: `${issues[0].message}${issues.length > 1 ? ` ${issues.length - 1} more ${issues.length - 1 === 1 ? "item needs" : "items need"} attention.` : ""}`,
+      });
+      return;
+    }
+    await refreshEmailStatus();
+    setSendOpen(true);
+  }
+
+  async function sendCurrentInvoice({ kind, to, cc, subject, message, testAddress }) {
+    await draft.saveNow();
+    const normalized = normalizeInvoice(draft.invoice);
+    setPrintInvoice(normalized);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const result = await sendInvoiceEmail({
+      to,
+      cc,
+      subject,
+      message,
+      suggestedName: `${filenameFor(normalized)}.pdf`,
+      pageSize: normalized.design.paperSize || "Letter",
+    });
+    const now = new Date().toISOString();
+    if (kind === "test") {
+      await workspaceState.saveRecord("invoices", { id: draft.recordId, lastTestSentAt: now });
+      if (!workspace.preferences.email.testAddress && testAddress) {
+        await workspaceState.updatePreferences({ email: { testAddress } });
+      }
+      setToast({ title: "Test sent", message: `Check ${to} for the invoice email.` });
+    } else {
+      if (["draft", ""].includes(String(normalized.meta.status || "").toLowerCase())) {
+        draft.updateField("meta.status", "sent");
+        await draft.saveNow();
+      }
+      await workspaceState.saveRecord("invoices", { id: draft.recordId, lastSentAt: now, lastSentTo: to });
+      setToast({ title: "Invoice sent", message: `Emailed to ${to}.` });
+    }
+    return result;
+  }
+
+  async function importFromQuickBooks(data, options) {
+    const { applyQuickBooksImport } = await import("./lib/importQuickBooks.js");
+    await draft.saveNow().catch(() => {});
+    let summary = null;
+    await workspaceState.update((current) => {
+      const result = applyQuickBooksImport(current, data, options);
+      summary = result.summary;
+      return result.workspace;
+    });
+    return summary;
+  }
+
+  async function saveCatalogItem(values) {
+    const result = await workspaceState.saveRecord("catalog", values);
+    setToast({ title: "Saved to products & services", message: `${result.record.name} is now in your dropdown.` });
+    return result.record;
+  }
 
   async function saveCurrentJson() {
     try {
@@ -825,7 +918,13 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar activePage={activeSidebarPage} onNavigate={navigate} onSettings={() => navigate("settings")} />
+      <Sidebar
+        activePage={activeSidebarPage}
+        onNavigate={navigate}
+        onSettings={() => navigate("settings")}
+        onNewInvoice={() => createInvoice()}
+        companyName={workspace.profile.company.name}
+      />
       <div className="app-main">
         {activePage === "overview" ? (
           <OverviewPage
@@ -839,6 +938,7 @@ export function App() {
             onResumeSetup={() => workspaceState.updateOnboarding({ status: "inProgress" })}
             onNewInvoice={() => createInvoice()}
             onImportInvoice={() => openImport("library")}
+            onImportQuickBooks={() => setQuickBooksOpen(true)}
             onOpenInvoice={openInvoice}
             onViewInvoices={() => navigate("invoices")}
             onMetricSelect={({ metric, currency }) => {
@@ -856,6 +956,7 @@ export function App() {
             initialCurrencyFilter={invoicePageFilter.currency}
             onNewInvoice={() => createInvoice()}
             onImportInvoice={() => openImport("library")}
+            onImportQuickBooks={() => setQuickBooksOpen(true)}
             onOpenInvoice={openInvoice}
             onDuplicateInvoice={duplicateInvoice}
             onExportInvoice={(id) => {
@@ -877,6 +978,15 @@ export function App() {
             onArchiveCustomer={(id) => workspaceState.archiveRecord("customers", id)}
             onCreateInvoice={(customerId) => createInvoice(customerId)}
             onOpenInvoice={openInvoice}
+            onImportQuickBooks={() => setQuickBooksOpen(true)}
+          />
+        ) : null}
+
+        {activePage === "products" ? (
+          <ProductsPage
+            catalog={workspace.catalog}
+            onSaveProduct={(values) => workspaceState.saveRecord("catalog", values)}
+            onArchiveProduct={(id) => workspaceState.archiveRecord("catalog", id)}
           />
         ) : null}
 
@@ -942,6 +1052,10 @@ export function App() {
             onRestore={() => restoreInputRef.current?.click()}
             onOpenUpdates={() => setUpdatesOpen(true)}
             onRestartOnboarding={() => workspaceState.updateOnboarding({ status: "inProgress", currentStep: "0" })}
+            emailPreferences={workspace.preferences.email}
+            onUpdateEmailPreferences={(patch) => workspaceState.updatePreferences({ email: patch })}
+            onEmailStatusChange={(result) => setEmailStatus({ available: true, ...result })}
+            onImportQuickBooks={() => setQuickBooksOpen(true)}
           />
         ) : null}
 
@@ -962,6 +1076,7 @@ export function App() {
               onExport={exportCurrent}
               onNew={() => createInvoice()}
               onCustomize={() => setCustomizeOpen(true)}
+              onSend={openSendDialog}
               isExporting={isExporting}
             />
             <main className="workspace">
@@ -972,6 +1087,8 @@ export function App() {
                     customers={workspace.customers.filter((customer) => !customer.archivedAt)}
                     selectedCustomerId={currentRecord?.customerId || ""}
                     onSelectCustomer={selectSavedCustomer}
+                    catalog={workspace.catalog}
+                    onSaveCatalogItem={saveCatalogItem}
                   />
                 ) : <PreviewCanvas invoice={draft.invoice} onExport={exportCurrent} />}
               </div>
@@ -999,6 +1116,30 @@ export function App() {
         <Suspense fallback={null}>
           <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} onImport={handleImportResult} onSample={saveSample} />
         </Suspense>
+      ) : null}
+      {quickBooksOpen ? (
+        <Suspense fallback={null}>
+          <QuickBooksImportDialog
+            open={quickBooksOpen}
+            onClose={() => setQuickBooksOpen(false)}
+            onImport={importFromQuickBooks}
+          />
+        </Suspense>
+      ) : null}
+      {draft.recordId ? (
+        <SendInvoiceDialog
+          open={sendOpen}
+          invoice={draft.invoice}
+          record={currentRecord}
+          emailPreferences={workspace.preferences.email}
+          emailStatus={emailStatus}
+          onClose={() => setSendOpen(false)}
+          onSend={sendCurrentInvoice}
+          onOpenSettings={() => {
+            setSendOpen(false);
+            navigate("settings");
+          }}
+        />
       ) : null}
       <Toast toast={toast} onClose={() => setToast(null)} />
       <UpdateDialog

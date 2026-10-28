@@ -4,24 +4,40 @@ import {
   GearSix,
   House,
   Palette,
+  Plus,
   Receipt,
+  Toolbox,
   UsersThree,
 } from "@phosphor-icons/react";
 
 const navigation = [
-  { id: "overview", label: "Overview", icon: House },
+  { id: "overview", label: "Dashboard", icon: House },
   { id: "invoices", label: "Invoices", icon: FileText },
   { id: "customers", label: "Customers", icon: UsersThree },
+  { id: "products", label: "Products & services", icon: Toolbox },
   { id: "company", label: "Company", icon: Buildings },
   { id: "templates", label: "Templates", icon: Palette },
 ];
 
-export function Sidebar({ activePage = "invoices", onNavigate, onSettings }) {
+export function Sidebar({ activePage = "invoices", onNavigate, onSettings, onNewInvoice, companyName }) {
   return (
     <aside className="app-sidebar" aria-label="Primary navigation">
-      <div className="brand-mark" aria-label="Invoice Studio">
-        <Receipt weight="fill" aria-hidden="true" />
+      <div className="sidebar-brand">
+        <div className="brand-mark" aria-hidden="true">
+          <Receipt weight="fill" />
+        </div>
+        <div className="sidebar-brand-text">
+          <strong>Invoice Studio</strong>
+          <span>{companyName || "Contractor invoicing"}</span>
+        </div>
       </div>
+
+      {onNewInvoice ? (
+        <button type="button" className="sidebar-new" onClick={onNewInvoice} title="New invoice" aria-label="New invoice">
+          <Plus size={18} weight="bold" aria-hidden="true" />
+          <span>New invoice</span>
+        </button>
+      ) : null}
 
       <nav className="sidebar-nav">
         {navigation.map(({ id, label, icon: Icon }) => {
@@ -36,7 +52,7 @@ export function Sidebar({ activePage = "invoices", onNavigate, onSettings }) {
               key={id}
               onClick={() => onNavigate?.(id)}
             >
-              <Icon size={22} weight={active ? "fill" : "regular"} aria-hidden="true" />
+              <Icon size={20} weight={active ? "fill" : "regular"} aria-hidden="true" />
               <span>{label}</span>
             </button>
           );
@@ -51,7 +67,7 @@ export function Sidebar({ activePage = "invoices", onNavigate, onSettings }) {
         title="Settings"
         onClick={onSettings}
       >
-        <GearSix size={22} aria-hidden="true" />
+        <GearSix size={20} weight={activePage === "settings" ? "fill" : "regular"} aria-hidden="true" />
         <span>Settings</span>
       </button>
     </aside>

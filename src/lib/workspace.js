@@ -285,6 +285,26 @@ function normalizeOnboarding(value, options = {}) {
   };
 }
 
+export const DEFAULT_EMAIL_SUBJECT = "Invoice {number} from {company}";
+export const DEFAULT_EMAIL_MESSAGE = [
+  "Hi {customer},",
+  "",
+  "Attached is invoice {number} for {job}. The balance due is {balance}, due {dueDate}.",
+  "",
+  "Thank you for your business.",
+  "{company}",
+].join("\n");
+
+function normalizeEmailPreferences(value) {
+  const source = isPlainObject(value) ? value : {};
+  return {
+    subject: safeText(source.subject, DEFAULT_EMAIL_SUBJECT, 400) || DEFAULT_EMAIL_SUBJECT,
+    message: safeText(source.message, DEFAULT_EMAIL_MESSAGE, 8_000) || DEFAULT_EMAIL_MESSAGE,
+    testAddress: safeText(source.testAddress, "", MAX_SHORT_TEXT),
+    requireTest: safeBoolean(source.requireTest, true),
+  };
+}
+
 function normalizeProfile(value) {
   const source = isPlainObject(value) ? value : {};
   const defaults = isPlainObject(source.defaults) ? source.defaults : {};
@@ -330,6 +350,9 @@ export function createInvoiceRecord(value = {}, options = {}) {
     createdAt: timestamps.createdAt,
     updatedAt: timestamps.updatedAt,
     lastExportedAt: safeIso(source.lastExportedAt, null),
+    lastTestSentAt: safeIso(source.lastTestSentAt, null),
+    lastSentAt: safeIso(source.lastSentAt, null),
+    lastSentTo: safeText(source.lastSentTo, "", 1_000),
     archivedAt: safeIso(source.archivedAt, null),
     invoice: cloneInvoice(invoiceSource),
   };
@@ -470,6 +493,7 @@ export function createWorkspace(options = {}) {
       defaultTemplateId: "builtin:modern",
       numbering: { prefix: "INV", nextSequence: 1, padding: 3, includeYear: true },
       onboarding: normalizeOnboarding({}, options),
+      email: normalizeEmailPreferences({}),
     },
     invoices: [],
     customers: [],
@@ -522,6 +546,7 @@ export function normalizeWorkspace(value, options = {}) {
         includeYear: safeBoolean(sourceNumbering.includeYear, true),
       },
       onboarding: normalizeOnboarding(sourcePreferences.onboarding, options),
+      email: normalizeEmailPreferences(sourcePreferences.email),
     },
     invoices: uniqueRecords(value.invoices, createInvoiceRecord, options),
     customers: uniqueRecords(value.customers, createCustomerRecord, options),

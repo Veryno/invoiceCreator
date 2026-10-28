@@ -1,4 +1,5 @@
 import {
+  ArrowSquareIn,
   House,
   Plus,
   UploadSimple,
@@ -41,6 +42,7 @@ export function OverviewPage({
   onResumeSetup,
   onNewInvoice,
   onImportInvoice,
+  onImportQuickBooks,
   onOpenInvoice,
   onViewInvoices,
   onMetricSelect,
@@ -61,14 +63,19 @@ export function OverviewPage({
       <PageHeader
         icon={House}
         eyebrow="Workspace"
-        title="Overview"
+        title="Dashboard"
         titleId="studio-overview-title"
-        description="See what needs attention, resume recent work, or start a new invoice. Everything stays on this computer."
+        description="What you’re owed, what needs attention, and your latest work."
         actions={(
           <>
+            {onImportQuickBooks ? (
+              <WorkspaceButton icon={ArrowSquareIn} onClick={onImportQuickBooks}>
+                From QuickBooks
+              </WorkspaceButton>
+            ) : null}
             {onImportInvoice ? (
               <WorkspaceButton icon={UploadSimple} onClick={onImportInvoice}>
-                Import
+                Import file
               </WorkspaceButton>
             ) : null}
             {onNewInvoice ? (

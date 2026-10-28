@@ -160,3 +160,27 @@ export async function saveTextFile({ suggestedName, contents, filters = [] }) {
 export function downloadText(contents, suggestedName, type = "text/plain") {
   downloadBlob(contents, suggestedName, type);
 }
+
+export function hasDesktopEmail() {
+  return Boolean(window.invoiceDesktop?.sendInvoiceEmail && window.invoiceDesktop?.getEmailSettings);
+}
+
+export async function getEmailSettings() {
+  if (!hasDesktopEmail()) return null;
+  return window.invoiceDesktop.getEmailSettings();
+}
+
+export async function saveEmailSettings({ settings, password }) {
+  if (!hasDesktopEmail()) throw new Error("Email sending is available in the desktop app.");
+  return window.invoiceDesktop.saveEmailSettings({ settings, password });
+}
+
+export async function verifyEmailSettings() {
+  if (!hasDesktopEmail()) throw new Error("Email sending is available in the desktop app.");
+  return window.invoiceDesktop.verifyEmailSettings();
+}
+
+export async function sendInvoiceEmail(options) {
+  if (!hasDesktopEmail()) throw new Error("Email sending is available in the desktop app.");
+  return window.invoiceDesktop.sendInvoiceEmail(options);
+}

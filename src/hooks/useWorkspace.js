@@ -167,6 +167,10 @@ export function WorkspaceProvider({ children, repository: providedRepository, re
         ...current.preferences.numbering,
         ...(patch?.numbering && typeof patch.numbering === "object" ? patch.numbering : {}),
       },
+      email: {
+        ...current.preferences.email,
+        ...(patch?.email && typeof patch.email === "object" ? patch.email : {}),
+      },
       onboarding: current.preferences.onboarding,
     },
   })), [update]);

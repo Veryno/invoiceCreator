@@ -96,6 +96,11 @@ function makeCanonicalDefaults() {
       phone: "",
       address: "",
     },
+    job: {
+      name: "",
+      address: "",
+      info: "",
+    },
     meta: {
       number: "",
       issueDate,
@@ -110,7 +115,6 @@ function makeCanonicalDefaults() {
     adjustments: {
       discountType: "percent",
       discountValue: 0,
-      shipping: 0,
       deposit: 0,
       taxRate: 0,
     },
@@ -134,8 +138,8 @@ function makeDefaultData() {
 
   return {
     company: {
-      name: "Northstar Studio & Build",
-      email: "hello@northstarbuild.com",
+      name: "Northstar Build Co.",
+      email: "office@northstarbuild.com",
       phone: "(415) 555-0138",
       website: "northstarbuild.com",
       address: "1800 Montgomery Street\nSan Francisco, CA 94111",
@@ -147,6 +151,11 @@ function makeDefaultData() {
       email: "accounts@riversideproperty.com",
       phone: "(510) 555-0184",
       address: "420 Harbor Avenue\nOakland, CA 94607",
+    },
+    job: {
+      name: "Unit 4B kitchen remodel",
+      address: "88 Linden Street, Unit 4B\nOakland, CA 94607",
+      info: "Permit #B-24-1187 · Gate code 4410",
     },
     meta: {
       number: `INV-${issueDate.slice(0, 4)}-001`,
@@ -160,42 +169,41 @@ function makeDefaultData() {
     },
     lineItems: [
       {
-        id: "line-design",
+        id: "line-demolition",
         serviceDate: issueDate,
-        item: "Design consultation",
-        description: "Space planning, finish selections, and project specifications",
-        quantity: 10,
-        rate: 125,
-        taxable: true,
+        item: "Demolition",
+        description: "Remove existing cabinets, counters, and flooring; haul debris",
+        quantity: 1,
+        rate: 1850,
+        taxable: false,
       },
       {
         id: "line-materials",
         serviceDate: issueDate,
-        item: "Materials & finishes",
-        description: "Custom millwork samples and approved finish materials",
+        item: "Materials",
+        description: "Cabinet boxes, quartz counters, and installation hardware",
         quantity: 1,
-        rate: 1850,
+        rate: 6420,
         taxable: true,
       },
       {
-        id: "line-coordination",
+        id: "line-labor",
         serviceDate: issueDate,
-        item: "Project coordination",
-        description: "Vendor scheduling, site coordination, and progress reporting",
-        quantity: 6,
+        item: "Labor",
+        description: "Cabinet and counter installation, 2-person crew",
+        quantity: 32,
         rate: 85,
         taxable: false,
       },
     ],
     adjustments: {
       discountType: "percent",
-      discountValue: 5,
-      shipping: 65,
-      deposit: 500,
+      discountValue: 0,
+      deposit: 2500,
       taxRate: 8.25,
     },
     content: {
-      notes: "Thank you for choosing Northstar Studio & Build. We appreciate your business.",
+      notes: "Thank you for choosing Northstar Build Co. We appreciate your business.",
       paymentInstructions: "Payment is due within 30 days. Please include the invoice number with your payment.",
     },
     design: {
@@ -225,6 +233,35 @@ export function makeLineItem(overrides = {}) {
     rate: asNumber(source.rate, 0),
     taxable: asBoolean(source.taxable, true),
   };
+}
+
+/**
+ * Returns the rate that produces the requested line amount for a quantity, the
+ * way accounting tools back-calculate rate when the amount is typed directly.
+ * A zero or blank quantity becomes 1 so the amount is never lost.
+ */
+export function lineRateForAmount(amount, quantity) {
+  const target = asDecimal(amount);
+  const qty = asDecimal(quantity);
+  if (qty.isZero()) return { quantity: 1, rate: moneyNumber(target) };
+  const rate = target.dividedBy(qty).toDecimalPlaces(6, InvoiceDecimal.ROUND_HALF_UP);
+  return { quantity: qty.toNumber(), rate: rate.toNumber() };
+}
+
+/**
+ * Parses money or quantity text the way people type it ("$1,250.50", "(40)").
+ * Returns null while the text is not yet a complete number.
+ */
+export function parseNumberInput(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const negative = /^\(.*\)$/.test(text) || text.startsWith("-");
+  const digits = text.replace(/[()\s$€£,-]/g, "");
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(digits)) return null;
+  const parsed = Number(digits);
+  if (!Number.isFinite(parsed)) return null;
+  return negative ? -parsed : parsed;
 }
 
 /**
@@ -319,9 +356,18 @@ export function normalizeInvoice(input = {}) {
   const meta = source.meta && typeof source.meta === "object" ? source.meta : {};
   const adjustments =
     source.adjustments && typeof source.adjustments === "object" ? source.adjustments : {};
+  const job = source.job && typeof source.job === "object" ? source.job : {};
   const content = source.content && typeof source.content === "object" ? source.content : {};
   const design = source.design && typeof source.design === "object" ? source.design : {};
-  const sourceLineItems = Array.isArray(source.lineItems) ? source.lineItems : defaults.lineItems;
+  // Shipping/fees are no longer a separate total. An older invoice that still
+  // carries one keeps its total by turning the amount into a non-taxable line.
+  const legacyFees = asNumber(adjustments.shipping, 0);
+  const sourceLineItems = [
+    ...(Array.isArray(source.lineItems) ? source.lineItems : defaults.lineItems),
+    ...(legacyFees > 0
+      ? [{ id: "line-fees", item: "Fees", description: "Shipping and fees", quantity: 1, rate: legacyFees, taxable: false }]
+      : []),
+  ];
   const discountType = adjustments.discountType === "fixed" ? "fixed" : "percent";
   const accentColor = asString(design.accentColor, defaults.design.accentColor);
   const usedLineIds = new Set();
@@ -356,6 +402,11 @@ export function normalizeInvoice(input = {}) {
       phone: asString(customer.phone, defaults.customer.phone),
       address: asString(customer.address, defaults.customer.address),
     },
+    job: {
+      name: asString(job.name, defaults.job.name),
+      address: asString(job.address, defaults.job.address),
+      info: asString(job.info, defaults.job.info),
+    },
     meta: {
       number: asString(meta.number, defaults.meta.number),
       issueDate: asString(meta.issueDate, defaults.meta.issueDate),
@@ -370,7 +421,6 @@ export function normalizeInvoice(input = {}) {
     adjustments: {
       discountType,
       discountValue: asNumber(adjustments.discountValue, defaults.adjustments.discountValue),
-      shipping: asNumber(adjustments.shipping, defaults.adjustments.shipping),
       deposit: asNumber(adjustments.deposit, defaults.adjustments.deposit),
       taxRate: asNumber(adjustments.taxRate, defaults.adjustments.taxRate),
     },
@@ -394,7 +444,6 @@ export function normalizeInvoice(input = {}) {
 
 /**
  * Calculates all invoice money using decimal arithmetic and HALF_UP rounding.
- * Shipping is not taxable because the invoice schema has no shipping tax flag.
  */
 export function calculateInvoice(invoice) {
   const normalized = normalizeInvoice(invoice);
@@ -423,16 +472,14 @@ export function calculateInvoice(invoice) {
   const taxableBase = rounded(InvoiceDecimal.max(taxableSubtotal.minus(taxableDiscount), 0));
   const taxRate = InvoiceDecimal.max(asDecimal(normalized.adjustments.taxRate), 0);
   const tax = rounded(taxableBase.times(taxRate).dividedBy(100));
-  const shipping = rounded(InvoiceDecimal.max(asDecimal(normalized.adjustments.shipping), 0));
   const deposit = rounded(InvoiceDecimal.max(asDecimal(normalized.adjustments.deposit), 0));
-  const total = rounded(subtotal.minus(roundedDiscount).plus(shipping).plus(tax));
+  const total = rounded(subtotal.minus(roundedDiscount).plus(tax));
   const balance = rounded(total.minus(deposit));
 
   return {
     lineItems: calculatedLineItems,
     subtotal: moneyNumber(subtotal),
     discount: moneyNumber(roundedDiscount),
-    shipping: moneyNumber(shipping),
     taxableSubtotal: moneyNumber(taxableSubtotal),
     taxableDiscount: moneyNumber(taxableDiscount),
     taxableBase: moneyNumber(taxableBase),
