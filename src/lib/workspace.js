@@ -1,4 +1,5 @@
 import { normalizeInvoice } from "./invoice.js";
+import { normalizeLayout, normalizeSavedText } from "./layout.js";
 
 export const WORKSPACE_SCHEMA_VERSION = 1;
 export const ONBOARDING_FLOW_VERSION = 1;
@@ -494,6 +495,8 @@ export function createWorkspace(options = {}) {
       numbering: { prefix: "INV", nextSequence: 1, padding: 3, includeYear: true },
       onboarding: normalizeOnboarding({}, options),
       email: normalizeEmailPreferences({}),
+      layout: normalizeLayout({}),
+      savedText: normalizeSavedText(undefined),
     },
     invoices: [],
     customers: [],
@@ -528,13 +531,14 @@ export function normalizeWorkspace(value, options = {}) {
     ? sourceMigrations.legacyDraftV1
     : {};
 
+  const profile = normalizeProfile(value.profile);
   const workspace = {
     schemaVersion: WORKSPACE_SCHEMA_VERSION,
     revision: safeInteger(value.revision, 0, { minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
     installId: safeId(value.installId, createId("install", options)),
     createdAt,
     updatedAt: safeIso(value.updatedAt, createdAt),
-    profile: normalizeProfile(value.profile),
+    profile,
     assets: normalizeAssets(value.assets),
     preferences: {
       activeInvoiceId: safeId(sourcePreferences.activeInvoiceId),
@@ -547,6 +551,8 @@ export function normalizeWorkspace(value, options = {}) {
       },
       onboarding: normalizeOnboarding(sourcePreferences.onboarding, options),
       email: normalizeEmailPreferences(sourcePreferences.email),
+      layout: normalizeLayout(sourcePreferences.layout, profile.defaults.design),
+      savedText: normalizeSavedText(sourcePreferences.savedText),
     },
     invoices: uniqueRecords(value.invoices, createInvoiceRecord, options),
     customers: uniqueRecords(value.customers, createCustomerRecord, options),
@@ -890,6 +896,21 @@ export function archiveWorkspaceRecord(value, collection, id, options = {}) {
   const now = resolveNow(options);
   const records = workspace[collection].map((record) => record.id === recordId
     ? { ...record, archivedAt: now, updatedAt: now }
+    : record);
+  return normalizeWorkspace({ ...workspace, [collection]: records, updatedAt: now }, options);
+}
+
+/** Brings an archived (deleted) record back. */
+export function restoreWorkspaceRecord(value, collection, id, options = {}) {
+  if (!WORKSPACE_COLLECTIONS.includes(collection)) {
+    throw new TypeError(`Unknown workspace collection: ${String(collection)}`);
+  }
+  const workspace = normalizeWorkspace(value, options);
+  const recordId = safeId(id);
+  if (!recordId) return workspace;
+  const now = resolveNow(options);
+  const records = workspace[collection].map((record) => record.id === recordId
+    ? { ...record, archivedAt: null, updatedAt: now }
     : record);
   return normalizeWorkspace({ ...workspace, [collection]: records, updatedAt: now }, options);
 }

@@ -669,7 +669,7 @@ button:disabled {
   min-height: 52px;
 }
 
-.line-table th:nth-child(4),
+.line-table .description-column,
 .line-table .description-cell {
   width: 30%;
 }

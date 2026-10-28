@@ -2133,3 +2133,153 @@
     animation: none;
   }
 }
+
+/* Automatic backups and deleted items */
+
+.setup-autobackup {
+  display: grid;
+  gap: 14px;
+}
+
+.setup-autobackup-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.setup-autobackup-folder {
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.setup-autobackup-folder > svg {
+  color: var(--brand);
+}
+
+.setup-autobackup-folder > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.setup-autobackup-folder span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.setup-autobackup-folder strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-autobackup-folder small {
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.setup-autobackup-keep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.setup-autobackup-keep select {
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.setup-autobackup-error {
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--danger);
+  background: #fff5f4;
+  border: 1px solid #f0c4c0;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.setup-autobackup-error svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.setup-deleted-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  list-style: none;
+}
+
+.setup-deleted-list li {
+  padding: 10px 0;
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.setup-deleted-kind {
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.setup-deleted-name {
+  min-width: 0;
+  display: grid;
+}
+
+.setup-deleted-name strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-deleted-name small,
+.setup-deleted-date {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .setup-autobackup-folder {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .setup-autobackup-folder > button {
+    grid-column: 1 / -1;
+  }
+
+  .setup-deleted-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .setup-deleted-kind,
+  .setup-deleted-date {
+    grid-column: 1;
+  }
+}

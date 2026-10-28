@@ -23,7 +23,7 @@ export function ProductServicePicker({
   const filtered = useMemo(() => filterProductOptions(options, query), [options, query]);
   const flat = useMemo(() => [...filtered.saved, ...filtered.common], [filtered]);
   const trimmed = String(value || "").trim();
-  const canSave = Boolean(onSaveNew && trimmed && !findProductOption(options, trimmed)?.source !== "saved");
+  const canSave = Boolean(onSaveNew && trimmed && findProductOption(options, trimmed)?.source !== "saved");
 
   // The line table scrolls horizontally, which would clip an absolutely
   // positioned menu, so the menu is placed against the viewport instead.

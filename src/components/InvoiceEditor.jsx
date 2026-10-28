@@ -9,6 +9,8 @@ export function InvoiceEditor({
   onSelectCustomer,
   catalog,
   onSaveCatalogItem,
+  onRemoveLine,
+  savedText,
 }) {
   return (
     <div className="editor-stack">
@@ -24,11 +26,11 @@ export function InvoiceEditor({
         updateLine={draft.updateLine}
         addLine={draft.addLine}
         duplicateLine={draft.duplicateLine}
-        removeLine={draft.removeLine}
+        removeLine={onRemoveLine || draft.removeLine}
         catalog={catalog}
         onSaveCatalogItem={onSaveCatalogItem}
       />
-      <NotesAndTotals invoice={draft.invoice} updateField={draft.updateField} />
+      <NotesAndTotals invoice={draft.invoice} updateField={draft.updateField} savedText={savedText} />
     </div>
   );
 }

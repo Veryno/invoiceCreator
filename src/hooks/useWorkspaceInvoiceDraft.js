@@ -174,6 +174,20 @@ export function useWorkspaceInvoiceDraft() {
     }));
   }, [mutate]);
 
+  // Puts a deleted line back where it was (Undo). A lone blank line left by
+  // deleting the last real line is replaced rather than kept.
+  const restoreLine = useCallback((line, index) => {
+    mutate((current) => {
+      if (current.lineItems.some((entry) => entry.id === line.id)) return current;
+      const [only] = current.lineItems;
+      const leftBlank = current.lineItems.length === 1
+        && !only.item && !only.description && !Number(only.rate);
+      const lineItems = leftBlank ? [] : [...current.lineItems];
+      lineItems.splice(Math.min(index, lineItems.length), 0, line);
+      return { ...current, lineItems };
+    });
+  }, [mutate]);
+
   const replaceInvoice = useCallback((nextInvoice) => {
     mutate(() => normalizeInvoice(nextInvoice));
   }, [mutate]);
@@ -197,6 +211,7 @@ export function useWorkspaceInvoiceDraft() {
     recordId,
     removeLine,
     replaceInvoice,
+    restoreLine,
     saveNow,
     savedAt,
     saveStatus,
@@ -210,6 +225,7 @@ export function useWorkspaceInvoiceDraft() {
     recordId,
     removeLine,
     replaceInvoice,
+    restoreLine,
     saveNow,
     savedAt,
     saveStatus,

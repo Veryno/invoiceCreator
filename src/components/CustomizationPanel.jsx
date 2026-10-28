@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   CaretDown,
   Check,
   FileText,
@@ -8,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { normalizeHexColorInput } from "../lib/invoice.js";
+import { COLUMN_FIELDS, labelFor } from "../lib/layout.js";
 
 const templates = [
   { id: "modern", label: "Modern", detail: "Bold header" },
@@ -110,7 +112,7 @@ function BrandColorControl({ value, onChange }) {
   );
 }
 
-export function CustomizationPanel({ invoice, updateField, isOpen, onClose }) {
+export function CustomizationPanel({ invoice, updateField, layout, onUpdateLayout, onOpenCustomize, isOpen, onClose }) {
   return (
     <aside className={`customization-panel${isOpen ? " is-open" : ""}`} aria-label="Invoice customization">
       <div className="customizer-header">
@@ -203,20 +205,23 @@ export function CustomizationPanel({ invoice, updateField, isOpen, onClose }) {
           <FileText size={18} aria-hidden="true" />
           <h3 id="columns-heading">Visible columns</h3>
         </div>
-        <Switch
-          id="show-service-date"
-          checked={invoice.design.showServiceDate}
-          onChange={(event) => updateField("design.showServiceDate", event.target.checked)}
-        >
-          Service date
-        </Switch>
-        <Switch
-          id="show-product"
-          checked={invoice.design.showItem}
-          onChange={(event) => updateField("design.showItem", event.target.checked)}
-        >
-          Product / service
-        </Switch>
+        <p className="customizer-note">Applies to all invoices.</p>
+        {COLUMN_FIELDS.map((column) => (
+          <Switch
+            key={column.key}
+            id={`show-column-${column.key}`}
+            checked={layout.columns[column.key]}
+            onChange={(event) => onUpdateLayout({ columns: { ...layout.columns, [column.key]: event.target.checked } })}
+          >
+            {column.label || labelFor(layout, column.key)}
+          </Switch>
+        ))}
+        {onOpenCustomize ? (
+          <button type="button" className="customizer-link" onClick={onOpenCustomize}>
+            Rename words or add your own fields
+            <ArrowRight size={14} weight="bold" aria-hidden="true" />
+          </button>
+        ) : null}
       </section>
 
       <section className="customizer-section customizer-section--last" aria-labelledby="document-heading">

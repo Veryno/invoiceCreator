@@ -20,6 +20,11 @@ const IPC_CHANNELS = Object.freeze({
   saveEmailSettings: "invoice-desktop:save-email-settings",
   verifyEmailSettings: "invoice-desktop:verify-email-settings",
   sendInvoiceEmail: "invoice-desktop:send-invoice-email",
+  getBackupSettings: "invoice-desktop:get-backup-settings",
+  saveBackupSettings: "invoice-desktop:save-backup-settings",
+  chooseBackupFolder: "invoice-desktop:choose-backup-folder",
+  backupNow: "invoice-desktop:backup-now",
+  openBackupFolder: "invoice-desktop:open-backup-folder",
 });
 
 const CLOSE_REASONS = new Set(["window-close", "restart-update"]);
@@ -93,6 +98,30 @@ const invoiceDesktop = Object.freeze({
       suggestedName: value.suggestedName,
       pageSize: value.pageSize,
     });
+  },
+
+  getBackupSettings() {
+    return ipcRenderer.invoke(IPC_CHANNELS.getBackupSettings);
+  },
+
+  saveBackupSettings(options) {
+    const value = requireOptions(options, "Backup settings");
+    return ipcRenderer.invoke(IPC_CHANNELS.saveBackupSettings, {
+      enabled: value.enabled,
+      keep: value.keep,
+    });
+  },
+
+  chooseBackupFolder() {
+    return ipcRenderer.invoke(IPC_CHANNELS.chooseBackupFolder);
+  },
+
+  backupNow() {
+    return ipcRenderer.invoke(IPC_CHANNELS.backupNow);
+  },
+
+  openBackupFolder() {
+    return ipcRenderer.invoke(IPC_CHANNELS.openBackupFolder);
   },
 
   getWorkspace() {

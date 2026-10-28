@@ -11,9 +11,11 @@ const {
   Menu,
   protocol,
   safeStorage,
+  shell,
 } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const nodemailer = require("nodemailer");
+const { createBackupService } = require("./backup-service.cjs");
 const { createEmailService } = require("./email-service.cjs");
 const { createUpdateManager } = require("./update-manager.cjs");
 const { createWorkspaceStore } = require("./workspace-store.cjs");
@@ -65,6 +67,11 @@ const IPC_CHANNELS = Object.freeze({
   saveEmailSettings: "invoice-desktop:save-email-settings",
   verifyEmailSettings: "invoice-desktop:verify-email-settings",
   sendInvoiceEmail: "invoice-desktop:send-invoice-email",
+  getBackupSettings: "invoice-desktop:get-backup-settings",
+  saveBackupSettings: "invoice-desktop:save-backup-settings",
+  chooseBackupFolder: "invoice-desktop:choose-backup-folder",
+  backupNow: "invoice-desktop:backup-now",
+  openBackupFolder: "invoice-desktop:open-backup-folder",
 });
 
 const PDF_PAGE_SIZES = new Map([
@@ -76,6 +83,7 @@ let mainWindow = null;
 let updateManager = null;
 let workspaceStore = null;
 let emailService = null;
+let backupService = null;
 let pendingCloseSave = null;
 let closeOperation = null;
 let approvedClose = null;
@@ -267,6 +275,11 @@ function requireUpdateManager() {
 function requireEmailService() {
   if (!emailService) throw new Error("Email is still starting. Try again in a moment.");
   return emailService;
+}
+
+function requireBackupService() {
+  if (!backupService) throw new Error("Automatic backups are still starting.");
+  return backupService;
 }
 
 function requireWorkspaceStore() {
@@ -717,6 +730,46 @@ function registerIpcHandlers() {
     });
   });
 
+  ipcMain.handle(IPC_CHANNELS.getBackupSettings, async (event) => {
+    assertTrustedSender(event);
+    return requireBackupService().getSettings();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.saveBackupSettings, async (event, payload) => {
+    assertTrustedSender(event);
+    if (!isRecord(payload)) throw new TypeError("Backup settings must be an object.");
+    return requireBackupService().saveSettings({ enabled: payload.enabled, keep: payload.keep });
+  });
+
+  ipcMain.handle(IPC_CHANNELS.chooseBackupFolder, async (event) => {
+    assertTrustedSender(event);
+    const service = requireBackupService();
+    const current = await service.getSettings();
+    const result = await dialog.showOpenDialog(ownerWindowFor(event), {
+      title: "Choose where to keep automatic backups",
+      buttonLabel: "Use this folder",
+      defaultPath: current.folder,
+      properties: ["openDirectory", "createDirectory", "promptToCreate"],
+    });
+    if (result.canceled || !result.filePaths?.[0]) return { canceled: true, ...current };
+    await service.setFolder(result.filePaths[0]);
+    return { canceled: false, ...(await service.backupNow()) };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.backupNow, async (event) => {
+    assertTrustedSender(event);
+    return requireBackupService().backupNow();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.openBackupFolder, async (event) => {
+    assertTrustedSender(event);
+    const { folder } = await requireBackupService().getSettings();
+    await fs.mkdir(folder, { recursive: true });
+    const error = await shell.openPath(folder);
+    if (error) throw new Error(error);
+    return { opened: true };
+  });
+
   ipcMain.handle(IPC_CHANNELS.getUpdateState, (event) => {
     assertTrustedSender(event);
     return requireUpdateManager().getState();
@@ -925,10 +978,16 @@ app.whenReady().then(async () => {
       safeStorage,
       createTransport: (options) => nodemailer.createTransport(options),
     });
+    backupService = createBackupService({
+      directoryPath: app.getPath("userData"),
+      defaultFolder: path.join(app.getPath("documents"), "Invoice Studio Backups"),
+      workspaceStore,
+    });
     updateManager = createUpdateManager({ app, autoUpdater });
     updateManager.onState(sendUpdateState);
     await createMainWindow();
     updateManager.start();
+    backupService.start();
   } catch (error) {
     console.error("Unable to start Invoice Studio:", error);
     const startupMessage = error?.code === "WORKSPACE_VERSION_UNSUPPORTED"
@@ -946,6 +1005,7 @@ app.whenReady().then(async () => {
 
 app.on("will-quit", () => {
   updateManager?.stop();
+  backupService?.stop();
   workspaceStore?.flush().catch((error) => {
     console.error("Unable to flush Invoice Studio workspace:", error);
   });

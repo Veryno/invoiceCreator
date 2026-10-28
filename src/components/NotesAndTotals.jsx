@@ -1,6 +1,8 @@
 import { Info } from "@phosphor-icons/react";
 import { calculateInvoice, formatMoney } from "../lib/invoice.js";
+import { appendSavedText } from "../lib/layout.js";
 import { NumberField } from "./NumberField.jsx";
+import { SavedTextMenu } from "./SavedTextMenu.jsx";
 
 function MoneyRow({ label, value, strong = false, muted = false }) {
   return (
@@ -11,7 +13,34 @@ function MoneyRow({ label, value, strong = false, muted = false }) {
   );
 }
 
-export function NotesAndTotals({ invoice, updateField }) {
+function TextWithSavedText({ id, label, path, value, placeholder, updateField, savedText }) {
+  return (
+    <div className="form-field form-field--saved-text">
+      <div className="form-field-head">
+        <label htmlFor={id}>{label}</label>
+        {savedText ? (
+          <SavedTextMenu
+            fieldLabel={label}
+            savedText={savedText.entries}
+            currentText={value}
+            onInsert={(body) => updateField(path, appendSavedText(value, body))}
+            onSaveCurrent={() => savedText.onSave(value)}
+            onManage={savedText.onManage}
+          />
+        ) : null}
+      </div>
+      <textarea
+        id={id}
+        rows="3"
+        value={value}
+        onChange={(event) => updateField(path, event.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+export function NotesAndTotals({ invoice, updateField, savedText }) {
   const totals = calculateInvoice(invoice);
   const money = (value) => formatMoney(value, invoice.meta.currency, invoice.meta.locale);
   const currencySymbol = new Intl.NumberFormat(invoice.meta.locale, {
@@ -29,26 +58,24 @@ export function NotesAndTotals({ invoice, updateField }) {
             <h2 id="notes-heading">Notes &amp; payment</h2>
           </div>
         </div>
-        <label className="form-field" htmlFor="invoice-notes">
-          <span>Message on invoice</span>
-          <textarea
-            id="invoice-notes"
-            rows="3"
-            value={invoice.content.notes}
-            onChange={(event) => updateField("content.notes", event.target.value)}
-            placeholder="Thank your customer or add project context"
-          />
-        </label>
-        <label className="form-field" htmlFor="payment-instructions">
-          <span>Payment instructions</span>
-          <textarea
-            id="payment-instructions"
-            rows="3"
-            value={invoice.content.paymentInstructions}
-            onChange={(event) => updateField("content.paymentInstructions", event.target.value)}
-            placeholder="Bank details, check instructions, or payment link"
-          />
-        </label>
+        <TextWithSavedText
+          id="invoice-notes"
+          label="Message on invoice"
+          path="content.notes"
+          value={invoice.content.notes}
+          placeholder="Thank your customer, add terms, warranty, or project context"
+          updateField={updateField}
+          savedText={savedText}
+        />
+        <TextWithSavedText
+          id="payment-instructions"
+          label="Payment instructions"
+          path="content.paymentInstructions"
+          value={invoice.content.paymentInstructions}
+          placeholder="Check, Zelle, or bank transfer instructions"
+          updateField={updateField}
+          savedText={savedText}
+        />
       </div>
 
       <div className="totals-editor" aria-label="Invoice totals">

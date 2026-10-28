@@ -66,6 +66,20 @@ function normalizedCurrency(value, fallback = "USD") {
   return /^[A-Z]{3}$/.test(currency) ? currency : fallback;
 }
 
+// Values for the owner's own fields (Permit #, Lot #, …), keyed by the field id
+// set up in the invoice layout. Only "field-" ids are kept so stored keys can
+// never collide with object internals.
+function normalizedCustomFields(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result = {};
+  for (const [key, entry] of Object.entries(value).slice(0, 40)) {
+    if (!/^field-[a-z0-9-]{1,48}$/.test(key)) continue;
+    const text = asString(entry).slice(0, 500);
+    if (text) result[key] = text;
+  }
+  return result;
+}
+
 function normalizedLocale(value, fallback = "en-US") {
   const locale = asString(value, fallback);
 
@@ -101,6 +115,7 @@ function makeCanonicalDefaults() {
       address: "",
       info: "",
     },
+    customFields: {},
     meta: {
       number: "",
       issueDate,
@@ -407,6 +422,7 @@ export function normalizeInvoice(input = {}) {
       address: asString(job.address, defaults.job.address),
       info: asString(job.info, defaults.job.info),
     },
+    customFields: normalizedCustomFields(source.customFields),
     meta: {
       number: asString(meta.number, defaults.meta.number),
       issueDate: asString(meta.issueDate, defaults.meta.issueDate),

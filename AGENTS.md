@@ -15,6 +15,10 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Invoices carry a job site (job name, job site address, job info such as permit # or gate code) next to Bill to, and it prints on the PDF.
 - There is no shipping/fees total. Extra charges are line items; older invoices with shipping are migrated to a non-taxable "Fees" line so totals don't change.
 - Line items use a product/service dropdown: the owner's saved catalog first, then common construction items, with "save to my list". Amount is editable and back-calculates the rate.
+- The app is internal: one owner (the user's father) running his own business. Favor customization, simplicity, and data safety over customer-facing features.
+- Customize page (workspace-wide, `preferences.layout` and `preferences.savedText`): renamed labels, visible line-item columns, and up to 12 custom fields (Permit #, Lot #, …) shown under Job site or Invoice information and printed when filled. These apply to every invoice on screen and in the PDF; per-template column toggles were retired in favor of this one setting.
+- Saved text: reusable wording (terms, warranty, payment instructions) inserted from a "Saved text" button on the message and payment fields, managed on the Customize page.
+- Data safety: a daily automatic backup (on by default, to Documents/Invoice Studio Backups, owner-chosen folder such as a USB or cloud-synced folder, keeps the last 30) written by the main process in the normal backup format. Every archive/delete offers Undo, and Settings → Archived items restores anything archived.
 - Right-click must offer the standard edit menu (cut, copy, paste, select all, spelling) in every text field.
 - Core input methods are manual entry plus CSV, XLSX, and JSON import. Legacy `.xls` files should be converted to XLSX or CSV before import.
 - Core output is a customizable, searchable professional PDF saved through a native file dialog.

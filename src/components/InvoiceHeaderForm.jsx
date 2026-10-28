@@ -1,5 +1,7 @@
 import { ArrowDown, Buildings, CaretRight, ImageSquare, X } from "@phosphor-icons/react";
 import { calculateInvoice, formatMoney } from "../lib/invoice.js";
+import { labelFor } from "../lib/layout.js";
+import { useInvoiceLayout } from "../hooks/useInvoiceLayout.js";
 
 const TERM_DAYS = new Map([
   ["Due on receipt", 0],
@@ -30,6 +32,20 @@ function Field({ label, className = "", ...inputProps }) {
   );
 }
 
+function CustomFields({ fields, invoice, updateField, className = "" }) {
+  return fields.map((field) => (
+    <Field
+      key={field.id}
+      id={`custom-${field.id}`}
+      className={className}
+      label={field.label}
+      name={field.id}
+      value={invoice.customFields?.[field.id] || ""}
+      onChange={(event) => updateField(`customFields.${field.id}`, event.target.value)}
+    />
+  ));
+}
+
 function TextAreaField({ label, className = "", ...inputProps }) {
   const id = inputProps.id || `field-${inputProps.name}`;
   return (
@@ -48,6 +64,9 @@ export function InvoiceHeaderForm({
   onSelectCustomer,
 }) {
   const totals = calculateInvoice(invoice);
+  const layout = useInvoiceLayout();
+  const jobFields = layout.fields.filter((field) => field.section === "job");
+  const invoiceFields = layout.fields.filter((field) => field.section === "invoice");
   const terms = invoice.meta.terms;
   const termOptions = TERM_DAYS.has(terms) || !terms ? [...TERM_DAYS.keys()] : [...TERM_DAYS.keys(), terms];
 
@@ -191,7 +210,7 @@ export function InvoiceHeaderForm({
 
       <div className="invoice-form-grid">
         <fieldset className="form-group customer-fields">
-          <legend>Bill to</legend>
+          <legend>{labelFor(layout, "billTo")}</legend>
           <div className="field-grid">
             <Field
               label="Customer or company"
@@ -217,7 +236,7 @@ export function InvoiceHeaderForm({
 
         <fieldset className="form-group job-fields">
           <legend>
-            Job site
+            {labelFor(layout, "jobSite")}
             {invoice.customer.address && invoice.job.address !== invoice.customer.address ? (
               <button
                 type="button"
@@ -252,6 +271,7 @@ export function InvoiceHeaderForm({
               value={invoice.job.info}
               onChange={(event) => updateField("job.info", event.target.value)}
             />
+            <CustomFields fields={jobFields} invoice={invoice} updateField={updateField} />
           </div>
         </fieldset>
 
@@ -265,7 +285,7 @@ export function InvoiceHeaderForm({
               onChange={(event) => updateField("meta.number", event.target.value)}
             />
             <Field
-              label="P.O. / contract no."
+              label={labelFor(layout, "poNumber")}
               name="purchase-order"
               value={invoice.meta.poNumber}
               onChange={(event) => updateField("meta.poNumber", event.target.value)}
@@ -307,6 +327,7 @@ export function InvoiceHeaderForm({
                 <option value="void">Void</option>
               </select>
             </label>
+            <CustomFields fields={invoiceFields} invoice={invoice} updateField={updateField} />
             <label className="form-field field-span-two" htmlFor="invoice-currency">
               <span>Currency</span>
               <select

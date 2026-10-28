@@ -184,3 +184,33 @@ export async function sendInvoiceEmail(options) {
   if (!hasDesktopEmail()) throw new Error("Email sending is available in the desktop app.");
   return window.invoiceDesktop.sendInvoiceEmail(options);
 }
+
+export function hasDesktopBackups() {
+  return Boolean(window.invoiceDesktop?.getBackupSettings && window.invoiceDesktop?.backupNow);
+}
+
+function requireDesktopBackups() {
+  if (!hasDesktopBackups()) throw new Error("Automatic backups are available in the desktop app.");
+  return window.invoiceDesktop;
+}
+
+export async function getBackupSettings() {
+  if (!hasDesktopBackups()) return null;
+  return window.invoiceDesktop.getBackupSettings();
+}
+
+export async function saveBackupSettings(patch) {
+  return requireDesktopBackups().saveBackupSettings(patch);
+}
+
+export async function chooseBackupFolder() {
+  return requireDesktopBackups().chooseBackupFolder();
+}
+
+export async function backupNow() {
+  return requireDesktopBackups().backupNow();
+}
+
+export async function openBackupFolder() {
+  return requireDesktopBackups().openBackupFolder();
+}

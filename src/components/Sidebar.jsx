@@ -6,6 +6,7 @@ import {
   Palette,
   Plus,
   Receipt,
+  SlidersHorizontal,
   Toolbox,
   UsersThree,
 } from "@phosphor-icons/react";
@@ -17,6 +18,7 @@ const navigation = [
   { id: "products", label: "Products & services", icon: Toolbox },
   { id: "company", label: "Company", icon: Buildings },
   { id: "templates", label: "Templates", icon: Palette },
+  { id: "customize", label: "Customize", icon: SlidersHorizontal },
 ];
 
 export function Sidebar({ activePage = "invoices", onNavigate, onSettings, onNewInvoice, companyName }) {

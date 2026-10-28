@@ -443,7 +443,7 @@ body {
   width: 200px;
 }
 
-.line-table th:nth-child(4),
+.line-table .description-column,
 .line-table .description-cell {
   width: auto;
 }
@@ -971,4 +971,172 @@ body {
   .company-disclosure > summary small {
     display: none;
   }
+}
+
+/* Toast with an Undo action */
+
+.toast--action {
+  grid-template-columns: auto 1fr auto auto;
+}
+
+.toast > .toast-action {
+  width: auto;
+  height: 32px;
+  padding: 0 12px;
+  color: var(--brand);
+  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toast > .toast-action:hover {
+  color: var(--brand-hover);
+  background: var(--brand-soft);
+}
+
+/* Saved text menu beside message fields */
+
+.form-field-head {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.form-field-head > label {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.saved-text {
+  position: relative;
+}
+
+.saved-text-toggle {
+  min-height: 26px;
+  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brand);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.saved-text-toggle:hover,
+.saved-text-toggle[aria-expanded="true"] {
+  background: var(--brand-soft);
+  border-color: #fcd9bd;
+}
+
+.saved-text-menu {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 4px);
+  right: 0;
+  width: min(380px, 80vw);
+  max-height: 360px;
+  padding: 6px;
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 36px rgba(16, 24, 40, 0.16), 0 2px 6px rgba(16, 24, 40, 0.06);
+}
+
+.saved-text-option {
+  width: 100%;
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.saved-text-option:hover,
+.saved-text-option:focus-visible {
+  background: var(--surface-hover);
+}
+
+.saved-text-option strong {
+  font-size: 13px;
+}
+
+.saved-text-option span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.saved-text-empty {
+  margin: 6px 8px;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.saved-text-actions {
+  margin-top: 4px;
+  padding-top: 4px;
+  display: grid;
+  border-top: 1px solid var(--border-soft);
+}
+
+.saved-text-actions button {
+  min-height: 34px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.saved-text-actions button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.saved-text-actions button:disabled {
+  color: var(--ink-faint);
+}
+
+.customizer-note {
+  margin: -4px 0 4px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.customizer-link {
+  margin-top: 8px;
+  padding: 6px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.customizer-link:hover {
+  color: var(--brand-hover);
+  text-decoration: underline;
 }

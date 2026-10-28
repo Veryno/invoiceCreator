@@ -26,6 +26,8 @@ import {
   TERM_OPTIONS,
 } from "./setupModel.js";
 import { EmailSettingsCard } from "../email/EmailSettingsCard.jsx";
+import { AutoBackupCard } from "./AutoBackupCard.jsx";
+import { DeletedItemsCard } from "./DeletedItemsCard.jsx";
 import "./setup.css";
 
 function formatBackupTime(value) {
@@ -70,6 +72,9 @@ export function SettingsWorkspace({
   onUpdateEmailPreferences,
   onEmailStatusChange,
   onImportQuickBooks,
+  deletedItems = EMPTY_LIST,
+  onRestoreDeleted,
+  onNotify,
 }) {
   const [confirmRestart, setConfirmRestart] = useState(false);
   const restartButtonRef = useRef(null);
@@ -253,12 +258,14 @@ export function SettingsWorkspace({
           </section>
         ) : null}
 
+        <AutoBackupCard onNotify={onNotify} />
+
         <section className="setup-settings-card" aria-labelledby="settings-backup-title">
           <div className="setup-settings-card-heading">
             <span><DownloadSimple size={20} weight="duotone" aria-hidden="true" /></span>
             <div>
               <h2 id="settings-backup-title">Backup and restore</h2>
-              <p>Keep a portable copy of your local Invoice Studio data.</p>
+              <p>Save a copy anywhere you like, or restore from any backup file, including the automatic ones.</p>
             </div>
           </div>
           <p className="setup-backup-timestamp" role="status">{formatBackupTime(lastBackupAt)}</p>
@@ -273,6 +280,8 @@ export function SettingsWorkspace({
             </button>
           </div>
         </section>
+
+        <DeletedItemsCard items={deletedItems} onRestore={onRestoreDeleted} />
 
         <section className="setup-settings-card" aria-labelledby="settings-updates-title">
           <div className="setup-settings-card-heading">

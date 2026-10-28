@@ -4,7 +4,8 @@ import { useEffect } from "react";
 export function Toast({ toast, onClose }) {
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = window.setTimeout(onClose, 4500);
+    // Leave time to reach an Undo button.
+    const timer = window.setTimeout(onClose, toast.action ? 10_000 : 4500);
     return () => window.clearTimeout(timer);
   }, [toast, onClose]);
 
@@ -12,12 +13,27 @@ export function Toast({ toast, onClose }) {
   const Icon = toast.type === "error" ? WarningCircle : CheckCircle;
 
   return (
-    <div className={`toast toast--${toast.type || "success"}`} role={toast.type === "error" ? "alert" : "status"}>
+    <div
+      className={`toast toast--${toast.type || "success"}${toast.action ? " toast--action" : ""}`}
+      role={toast.type === "error" ? "alert" : "status"}
+    >
       <Icon size={21} weight="fill" aria-hidden="true" />
       <div>
         <strong>{toast.title}</strong>
         {toast.message && <span>{toast.message}</span>}
       </div>
+      {toast.action ? (
+        <button
+          type="button"
+          className="toast-action"
+          onClick={() => {
+            onClose();
+            toast.action.onClick();
+          }}
+        >
+          {toast.action.label}
+        </button>
+      ) : null}
       <button type="button" onClick={onClose} aria-label="Dismiss notification">
         <X size={16} weight="bold" aria-hidden="true" />
       </button>

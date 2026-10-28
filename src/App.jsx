@@ -25,11 +25,13 @@ import { Topbar } from "./components/Topbar.jsx";
 import { UpdateDialog } from "./components/UpdateDialog.jsx";
 import {
   CustomersPage,
+  CustomizePage,
   InvoicesPage,
   OverviewPage,
   ProductsPage,
 } from "./components/workspace/index.js";
 import { useAppUpdater } from "./hooks/useAppUpdater.js";
+import { InvoiceLayoutProvider } from "./hooks/useInvoiceLayout.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { useWorkspaceInvoiceDraft } from "./hooks/useWorkspaceInvoiceDraft.js";
 import {
@@ -48,6 +50,7 @@ import {
   sanitizeFilenamePart,
   validateInvoiceForExport,
 } from "./lib/invoice.js";
+import { MAX_SAVED_TEXT, newSavedTextId, savedTextTitle } from "./lib/layout.js";
 import {
   commitImportedCustomers,
   resolveImportedCustomer,
@@ -104,6 +107,40 @@ function buildPresetList(workspace) {
   ];
 }
 
+function buildDeletedItems(workspace) {
+  if (!workspace) return [];
+  const items = [
+    ...workspace.invoices.filter((record) => record.archivedAt).map((record) => ({
+      collection: "invoices",
+      id: record.id,
+      archivedAt: record.archivedAt,
+      name: `Invoice ${record.invoice.meta.number || "draft"}`,
+      detail: [record.invoice.customer.name, record.invoice.job.name].filter(Boolean).join(" · "),
+    })),
+    ...workspace.customers.filter((record) => record.archivedAt).map((record) => ({
+      collection: "customers",
+      id: record.id,
+      archivedAt: record.archivedAt,
+      name: record.name || "Unnamed customer",
+      detail: record.email,
+    })),
+    ...workspace.catalog.filter((record) => record.archivedAt).map((record) => ({
+      collection: "catalog",
+      id: record.id,
+      archivedAt: record.archivedAt,
+      name: record.name || "Unnamed item",
+      detail: record.description,
+    })),
+    ...workspace.templates.filter((record) => record.archivedAt).map((record) => ({
+      collection: "templates",
+      id: record.id,
+      archivedAt: record.archivedAt,
+      name: record.name,
+    })),
+  ];
+  return items.sort((first, second) => second.archivedAt.localeCompare(first.archivedAt));
+}
+
 function buildInvoiceViewModels(workspace) {
   if (!workspace) return [];
   const payments = new Map();
@@ -143,6 +180,7 @@ function pageTitle(page, number) {
     products: "Products & services",
     company: "Company",
     templates: "Templates",
+    customize: "Customize",
     settings: "Settings",
   };
   return `${labels[page] || "Invoice Studio"} · Invoice Studio`;
@@ -749,11 +787,50 @@ export function App() {
     await openInvoice(duplicated.record.id);
   }
 
+  // Deleting only archives a record, so every delete offers Undo here and
+  // stays restorable from Settings → Archived items.
+  async function archiveWithUndo(collection, id, title) {
+    await workspaceState.archiveRecord(collection, id);
+    setToast({
+      title,
+      message: "You can also restore it later from Settings → Archived items.",
+      action: { label: "Undo", onClick: () => void workspaceState.restoreRecord(collection, id) },
+    });
+  }
+
   async function archiveInvoice(id) {
     const record = workspace.invoices.find((entry) => entry.id === id);
-    if (!record || !window.confirm(`Archive invoice ${record.invoice.meta.number || "Draft"}? You can still recover it from a workspace backup.`)) return;
-    await workspaceState.archiveRecord("invoices", id);
-    setToast({ title: "Invoice archived", message: "Its saved PDF and workspace backups are unchanged." });
+    if (!record) return;
+    await archiveWithUndo("invoices", id, `Invoice ${record.invoice.meta.number || "draft"} archived`);
+  }
+
+  function removeLineWithUndo(id) {
+    const index = draft.invoice.lineItems.findIndex((line) => line.id === id);
+    if (index < 0) return;
+    const line = draft.invoice.lineItems[index];
+    draft.removeLine(id);
+    if (!line.item && !line.description && !Number(line.rate)) return;
+    setToast({
+      title: `Line ${index + 1} deleted`,
+      message: line.item || line.description || undefined,
+      action: { label: "Undo", onClick: () => draft.restoreLine(line, index) },
+    });
+  }
+
+  async function saveTextToList(body) {
+    const text = String(body || "").trim();
+    const list = workspace.preferences.savedText;
+    if (!text || list.length >= MAX_SAVED_TEXT) return;
+    const title = savedTextTitle(text);
+    await workspaceState.updatePreferences({
+      savedText: [...list, { id: newSavedTextId(), title, body: text }],
+    });
+    setToast({ title: "Saved text added", message: `“${title}” is in your Saved text list. Rename it on the Customize page.` });
+  }
+
+  async function restoreDeleted(item) {
+    await workspaceState.restoreRecord(item.collection, item.id);
+    setToast({ title: `${item.name} restored` });
   }
 
   async function selectSavedCustomer(id) {
@@ -885,15 +962,18 @@ export function App() {
   if (workspaceState.status === "error") return <WorkspaceFailure error={workspaceState.error} />;
 
   const onboardingStatus = workspace.preferences.onboarding.status;
+  const layout = workspace.preferences.layout;
   if (["notStarted", "inProgress"].includes(onboardingStatus)) {
     return (
-      <OnboardingController
-        workspaceState={workspaceState}
-        presets={presets}
-        onNavigate={navigate}
-        onCreateInvoice={createInvoice}
-        setToast={setToast}
-      />
+      <InvoiceLayoutProvider layout={layout}>
+        <OnboardingController
+          workspaceState={workspaceState}
+          presets={presets}
+          onNavigate={navigate}
+          onCreateInvoice={createInvoice}
+          setToast={setToast}
+        />
+      </InvoiceLayoutProvider>
     );
   }
 
@@ -916,245 +996,281 @@ export function App() {
     },
   };
 
+  const savedText = {
+    entries: workspace.preferences.savedText.filter((entry) => entry.body),
+    onSave: saveTextToList,
+    onManage: () => navigate("customize"),
+  };
+
   return (
-    <div className="app-shell">
-      <Sidebar
-        activePage={activeSidebarPage}
-        onNavigate={navigate}
-        onSettings={() => navigate("settings")}
-        onNewInvoice={() => createInvoice()}
-        companyName={workspace.profile.company.name}
-      />
-      <div className="app-main">
-        {activePage === "overview" ? (
-          <OverviewPage
-            invoices={invoices}
-            setup={onboardingStatus === "completed" ? { status: "complete" } : {
-              status: onboardingStatus,
-              currentStep: Number.parseInt(workspace.preferences.onboarding.currentStep, 10) || 0,
-              completedSteps: workspace.preferences.onboarding.completedSteps.length,
-              totalSteps: 4,
-            }}
-            onResumeSetup={() => workspaceState.updateOnboarding({ status: "inProgress" })}
-            onNewInvoice={() => createInvoice()}
-            onImportInvoice={() => openImport("library")}
-            onImportQuickBooks={() => setQuickBooksOpen(true)}
-            onOpenInvoice={openInvoice}
-            onViewInvoices={() => navigate("invoices")}
-            onMetricSelect={({ metric, currency }) => {
-              setInvoicePageFilter({ status: metric, currency, key: Date.now() });
-              navigate("invoices");
-            }}
-          />
-        ) : null}
-
-        {activePage === "invoices" ? (
-          <InvoicesPage
-            key={`${invoicePageFilter.key}-${invoicePageFilter.status}-${invoicePageFilter.currency}`}
-            invoices={invoices}
-            initialStatusFilter={invoicePageFilter.status}
-            initialCurrencyFilter={invoicePageFilter.currency}
-            onNewInvoice={() => createInvoice()}
-            onImportInvoice={() => openImport("library")}
-            onImportQuickBooks={() => setQuickBooksOpen(true)}
-            onOpenInvoice={openInvoice}
-            onDuplicateInvoice={duplicateInvoice}
-            onExportInvoice={(id) => {
-              const record = workspace.invoices.find((entry) => entry.id === id);
-              if (record) void exportInvoiceDocument(record.invoice, record.id);
-            }}
-            onArchiveInvoice={archiveInvoice}
-          />
-        ) : null}
-
-        {activePage === "customers" ? (
-          <CustomersPage
-            customers={customers}
-            invoices={invoices}
-            onCreateCustomer={async (values) => (await workspaceState.saveRecord("customers", values)).record}
-            onUpdateCustomer={async (id, patch) => {
-              await workspaceState.saveRecord("customers", { id, ...patch });
-            }}
-            onArchiveCustomer={(id) => workspaceState.archiveRecord("customers", id)}
-            onCreateInvoice={(customerId) => createInvoice(customerId)}
-            onOpenInvoice={openInvoice}
-            onImportQuickBooks={() => setQuickBooksOpen(true)}
-          />
-        ) : null}
-
-        {activePage === "products" ? (
-          <ProductsPage
-            catalog={workspace.catalog}
-            onSaveProduct={(values) => workspaceState.saveRecord("catalog", values)}
-            onArchiveProduct={(id) => workspaceState.archiveRecord("catalog", id)}
-          />
-        ) : null}
-
-        {activePage === "company" ? <CompanyWorkspace workspaceState={workspaceState} onBack={() => navigate("overview")} /> : null}
-
-        {activePage === "templates" ? (
-          <TemplatesWorkspace
-            presets={presets}
-            defaultPresetId={workspace.preferences.defaultTemplateId}
-            previewInvoice={templatePreview}
-            selectedPresetId={selectedPresetId}
-            isSaving={workspaceState.saveStatus === "saving"}
-            onSelectPreset={setSelectedPresetId}
-            onCreatePreset={async (preset) => {
-              const saved = await workspaceState.saveRecord("templates", preset);
-              setSelectedPresetId(saved.record.id);
-              return saved.record;
-            }}
-            onUpdatePreset={async (id, patch) => {
-              try {
-                await workspaceState.saveRecord("templates", { id, ...patch });
-              } catch (error) {
-                setToast({ type: "error", title: "Template wasn’t saved", message: error?.message || "Try that change again." });
-              }
-            }}
-            onRenamePreset={async (id, name) => {
-              try {
-                await workspaceState.saveRecord("templates", { id, name });
-              } catch (error) {
-                setToast({ type: "error", title: "Template wasn’t renamed", message: error?.message || "Try again." });
-              }
-            }}
-            onDuplicatePreset={async (id) => {
-              const current = presets.find((preset) => preset.id === id);
-              if (!current) return;
-              const saved = await workspaceState.saveRecord("templates", {
-                name: `${current.name} copy`,
-                accentMode: current.accentMode,
-                design: current.design,
-                content: current.content,
-              });
-              setSelectedPresetId(saved.record.id);
-            }}
-            onDeletePreset={async (id) => {
-              await workspaceState.archiveRecord("templates", id);
-              setSelectedPresetId(undefined);
-            }}
-            onSetDefault={(id) => workspaceState.updatePreferences({ defaultTemplateId: id })}
-            onApplyToCurrent={applyPreset}
-          />
-        ) : null}
-
-        {activePage === "settings" ? (
-          <SettingsWorkspace
-            preferences={settingsPreferences}
-            presets={presets}
-            updateState={updater.state}
-            isBackingUp={isBackingUp}
-            isRestoring={isRestoring}
-            lastBackupAt={lastBackupAt}
-            onUpdatePreferences={updateSettings}
-            onBackup={createBackup}
-            onRestore={() => restoreInputRef.current?.click()}
-            onOpenUpdates={() => setUpdatesOpen(true)}
-            onRestartOnboarding={() => workspaceState.updateOnboarding({ status: "inProgress", currentStep: "0" })}
-            emailPreferences={workspace.preferences.email}
-            onUpdateEmailPreferences={(patch) => workspaceState.updatePreferences({ email: patch })}
-            onEmailStatusChange={(result) => setEmailStatus({ available: true, ...result })}
-            onImportQuickBooks={() => setQuickBooksOpen(true)}
-          />
-        ) : null}
-
-        {activePage === "invoice-editor" && draft.recordId ? (
-          <>
-            <Topbar
-              invoiceNumber={draft.invoice.meta.number}
-              savedAt={draft.savedAt}
-              saveStatus={draft.saveStatus}
-              viewMode={viewMode}
-              onViewMode={setViewMode}
-              onBack={async () => {
-                await draft.saveNow().catch(() => {});
+    <InvoiceLayoutProvider layout={layout}>
+      <div className="app-shell">
+        <Sidebar
+          activePage={activeSidebarPage}
+          onNavigate={navigate}
+          onSettings={() => navigate("settings")}
+          onNewInvoice={() => createInvoice()}
+          companyName={workspace.profile.company.name}
+        />
+        <div className="app-main">
+          {activePage === "overview" ? (
+            <OverviewPage
+              invoices={invoices}
+              setup={onboardingStatus === "completed" ? { status: "complete" } : {
+                status: onboardingStatus,
+                currentStep: Number.parseInt(workspace.preferences.onboarding.currentStep, 10) || 0,
+                completedSteps: workspace.preferences.onboarding.completedSteps.length,
+                totalSteps: 4,
+              }}
+              onResumeSetup={() => workspaceState.updateOnboarding({ status: "inProgress" })}
+              onNewInvoice={() => createInvoice()}
+              onImportInvoice={() => openImport("library")}
+              onImportQuickBooks={() => setQuickBooksOpen(true)}
+              onOpenInvoice={openInvoice}
+              onViewInvoices={() => navigate("invoices")}
+              onMetricSelect={({ metric, currency }) => {
+                setInvoicePageFilter({ status: metric, currency, key: Date.now() });
                 navigate("invoices");
               }}
-              onImport={() => openImport("active")}
-              onSaveJson={saveCurrentJson}
-              onExport={exportCurrent}
-              onNew={() => createInvoice()}
-              onCustomize={() => setCustomizeOpen(true)}
-              onSend={openSendDialog}
-              isExporting={isExporting}
             />
-            <main className="workspace">
-              <div className="workspace-content">
-                {viewMode === "editor" ? (
-                  <InvoiceEditor
-                    draft={draft}
-                    customers={workspace.customers.filter((customer) => !customer.archivedAt)}
-                    selectedCustomerId={currentRecord?.customerId || ""}
-                    onSelectCustomer={selectSavedCustomer}
-                    catalog={workspace.catalog}
-                    onSaveCatalogItem={saveCatalogItem}
-                  />
-                ) : <PreviewCanvas invoice={draft.invoice} onExport={exportCurrent} />}
-              </div>
-              <CustomizationPanel
-                invoice={draft.invoice}
-                updateField={draft.updateField}
-                isOpen={customizeOpen}
-                onClose={() => setCustomizeOpen(false)}
-              />
-            </main>
-          </>
-        ) : null}
-      </div>
+          ) : null}
 
-      <div className="print-root" aria-hidden="true"><InvoiceDocument invoice={printInvoice} /></div>
-      <input
-        ref={restoreInputRef}
-        className="visually-hidden"
-        type="file"
-        accept=".json,application/json"
-        aria-label="Choose Invoice Studio backup"
-        onChange={(event) => restoreBackup(event.target.files?.[0])}
-      />
-      {importOpen ? (
-        <Suspense fallback={null}>
-          <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} onImport={handleImportResult} onSample={saveSample} />
-        </Suspense>
-      ) : null}
-      {quickBooksOpen ? (
-        <Suspense fallback={null}>
-          <QuickBooksImportDialog
-            open={quickBooksOpen}
-            onClose={() => setQuickBooksOpen(false)}
-            onImport={importFromQuickBooks}
+          {activePage === "invoices" ? (
+            <InvoicesPage
+              key={`${invoicePageFilter.key}-${invoicePageFilter.status}-${invoicePageFilter.currency}`}
+              invoices={invoices}
+              initialStatusFilter={invoicePageFilter.status}
+              initialCurrencyFilter={invoicePageFilter.currency}
+              onNewInvoice={() => createInvoice()}
+              onImportInvoice={() => openImport("library")}
+              onImportQuickBooks={() => setQuickBooksOpen(true)}
+              onOpenInvoice={openInvoice}
+              onDuplicateInvoice={duplicateInvoice}
+              onExportInvoice={(id) => {
+                const record = workspace.invoices.find((entry) => entry.id === id);
+                if (record) void exportInvoiceDocument(record.invoice, record.id);
+              }}
+              onArchiveInvoice={archiveInvoice}
+            />
+          ) : null}
+
+          {activePage === "customers" ? (
+            <CustomersPage
+              customers={customers}
+              invoices={invoices}
+              onCreateCustomer={async (values) => (await workspaceState.saveRecord("customers", values)).record}
+              onUpdateCustomer={async (id, patch) => {
+                await workspaceState.saveRecord("customers", { id, ...patch });
+              }}
+              onArchiveCustomer={async (id) => {
+                const customer = workspace.customers.find((entry) => entry.id === id);
+                await archiveWithUndo("customers", id, `${customer?.name || "Customer"} archived`);
+              }}
+              onCreateInvoice={(customerId) => createInvoice(customerId)}
+              onOpenInvoice={openInvoice}
+              onImportQuickBooks={() => setQuickBooksOpen(true)}
+            />
+          ) : null}
+
+          {activePage === "products" ? (
+            <ProductsPage
+              catalog={workspace.catalog}
+              onSaveProduct={(values) => workspaceState.saveRecord("catalog", values)}
+              onArchiveProduct={async (id) => {
+                const product = workspace.catalog.find((entry) => entry.id === id);
+                await archiveWithUndo("catalog", id, `${product?.name || "Item"} archived`);
+              }}
+            />
+          ) : null}
+
+          {activePage === "company" ? <CompanyWorkspace workspaceState={workspaceState} onBack={() => navigate("overview")} /> : null}
+
+          {activePage === "templates" ? (
+            <TemplatesWorkspace
+              presets={presets}
+              defaultPresetId={workspace.preferences.defaultTemplateId}
+              previewInvoice={templatePreview}
+              selectedPresetId={selectedPresetId}
+              isSaving={workspaceState.saveStatus === "saving"}
+              onSelectPreset={setSelectedPresetId}
+              onCreatePreset={async (preset) => {
+                const saved = await workspaceState.saveRecord("templates", preset);
+                setSelectedPresetId(saved.record.id);
+                return saved.record;
+              }}
+              onUpdatePreset={async (id, patch) => {
+                try {
+                  await workspaceState.saveRecord("templates", { id, ...patch });
+                } catch (error) {
+                  setToast({ type: "error", title: "Template wasn’t saved", message: error?.message || "Try that change again." });
+                }
+              }}
+              onRenamePreset={async (id, name) => {
+                try {
+                  await workspaceState.saveRecord("templates", { id, name });
+                } catch (error) {
+                  setToast({ type: "error", title: "Template wasn’t renamed", message: error?.message || "Try again." });
+                }
+              }}
+              onDuplicatePreset={async (id) => {
+                const current = presets.find((preset) => preset.id === id);
+                if (!current) return;
+                const saved = await workspaceState.saveRecord("templates", {
+                  name: `${current.name} copy`,
+                  accentMode: current.accentMode,
+                  design: current.design,
+                  content: current.content,
+                });
+                setSelectedPresetId(saved.record.id);
+              }}
+              onDeletePreset={async (id) => {
+                const template = workspace.templates.find((entry) => entry.id === id);
+                setSelectedPresetId(undefined);
+                await archiveWithUndo("templates", id, `${template?.name || "Template"} deleted`);
+              }}
+              onSetDefault={(id) => workspaceState.updatePreferences({ defaultTemplateId: id })}
+              onApplyToCurrent={applyPreset}
+            />
+          ) : null}
+
+          {activePage === "customize" ? (
+            <CustomizePage
+              layout={layout}
+              savedText={workspace.preferences.savedText}
+              onUpdateLayout={(patch) => workspaceState.updatePreferences({ layout: patch })}
+              onUpdateSavedText={(list) => workspaceState.updatePreferences({ savedText: list })}
+              onNotify={setToast}
+            />
+          ) : null}
+
+          {activePage === "settings" ? (
+            <SettingsWorkspace
+              preferences={settingsPreferences}
+              presets={presets}
+              updateState={updater.state}
+              isBackingUp={isBackingUp}
+              isRestoring={isRestoring}
+              lastBackupAt={lastBackupAt}
+              onUpdatePreferences={updateSettings}
+              onBackup={createBackup}
+              onRestore={() => restoreInputRef.current?.click()}
+              onOpenUpdates={() => setUpdatesOpen(true)}
+              onRestartOnboarding={() => workspaceState.updateOnboarding({ status: "inProgress", currentStep: "0" })}
+              emailPreferences={workspace.preferences.email}
+              onUpdateEmailPreferences={(patch) => workspaceState.updatePreferences({ email: patch })}
+              onEmailStatusChange={(result) => setEmailStatus({ available: true, ...result })}
+              onImportQuickBooks={() => setQuickBooksOpen(true)}
+              deletedItems={buildDeletedItems(workspace)}
+              onRestoreDeleted={restoreDeleted}
+              onNotify={setToast}
+            />
+          ) : null}
+
+          {activePage === "invoice-editor" && draft.recordId ? (
+            <>
+              <Topbar
+                invoiceNumber={draft.invoice.meta.number}
+                savedAt={draft.savedAt}
+                saveStatus={draft.saveStatus}
+                viewMode={viewMode}
+                onViewMode={setViewMode}
+                onBack={async () => {
+                  await draft.saveNow().catch(() => {});
+                  navigate("invoices");
+                }}
+                onImport={() => openImport("active")}
+                onSaveJson={saveCurrentJson}
+                onExport={exportCurrent}
+                onNew={() => createInvoice()}
+                onCustomize={() => setCustomizeOpen(true)}
+                onSend={openSendDialog}
+                isExporting={isExporting}
+              />
+              <main className="workspace">
+                <div className="workspace-content">
+                  {viewMode === "editor" ? (
+                    <InvoiceEditor
+                      draft={draft}
+                      customers={workspace.customers.filter((customer) => !customer.archivedAt)}
+                      selectedCustomerId={currentRecord?.customerId || ""}
+                      onSelectCustomer={selectSavedCustomer}
+                      catalog={workspace.catalog}
+                      onSaveCatalogItem={saveCatalogItem}
+                      onRemoveLine={removeLineWithUndo}
+                      savedText={savedText}
+                    />
+                  ) : <PreviewCanvas invoice={draft.invoice} onExport={exportCurrent} />}
+                </div>
+                <CustomizationPanel
+                  invoice={draft.invoice}
+                  updateField={draft.updateField}
+                  layout={layout}
+                  onUpdateLayout={(patch) => workspaceState.updatePreferences({ layout: patch })}
+                  onOpenCustomize={() => {
+                    setCustomizeOpen(false);
+                    navigate("customize");
+                  }}
+                  isOpen={customizeOpen}
+                  onClose={() => setCustomizeOpen(false)}
+                />
+              </main>
+            </>
+          ) : null}
+        </div>
+
+        <div className="print-root" aria-hidden="true"><InvoiceDocument invoice={printInvoice} /></div>
+        <input
+          ref={restoreInputRef}
+          className="visually-hidden"
+          type="file"
+          accept=".json,application/json"
+          aria-label="Choose Invoice Studio backup"
+          onChange={(event) => restoreBackup(event.target.files?.[0])}
+        />
+        {importOpen ? (
+          <Suspense fallback={null}>
+            <ImportWizard open={importOpen} onClose={() => setImportOpen(false)} onImport={handleImportResult} onSample={saveSample} />
+          </Suspense>
+        ) : null}
+        {quickBooksOpen ? (
+          <Suspense fallback={null}>
+            <QuickBooksImportDialog
+              open={quickBooksOpen}
+              onClose={() => setQuickBooksOpen(false)}
+              onImport={importFromQuickBooks}
+            />
+          </Suspense>
+        ) : null}
+        {draft.recordId ? (
+          <SendInvoiceDialog
+            open={sendOpen}
+            invoice={draft.invoice}
+            record={currentRecord}
+            emailPreferences={workspace.preferences.email}
+            emailStatus={emailStatus}
+            onClose={() => setSendOpen(false)}
+            onSend={sendCurrentInvoice}
+            onOpenSettings={() => {
+              setSendOpen(false);
+              navigate("settings");
+            }}
           />
-        </Suspense>
-      ) : null}
-      {draft.recordId ? (
-        <SendInvoiceDialog
-          open={sendOpen}
-          invoice={draft.invoice}
-          record={currentRecord}
-          emailPreferences={workspace.preferences.email}
-          emailStatus={emailStatus}
-          onClose={() => setSendOpen(false)}
-          onSend={sendCurrentInvoice}
-          onOpenSettings={() => {
-            setSendOpen(false);
-            navigate("settings");
+        ) : null}
+        <Toast toast={toast} onClose={() => setToast(null)} />
+        <UpdateDialog
+          open={updatesOpen}
+          onClose={() => setUpdatesOpen(false)}
+          updateState={updater.state}
+          onCheck={() => handleUpdateAction(updater.checkForUpdates, "Try checking again in a moment.")}
+          onDownload={() => handleUpdateAction(updater.downloadUpdate, "Try downloading the update again.")}
+          onRestart={async () => {
+            await handleUpdateAction(async () => {
+              await draft.saveNow();
+              return updater.restartAndInstall();
+            }, "Close and reopen Invoice Studio, then try the update again.");
           }}
         />
-      ) : null}
-      <Toast toast={toast} onClose={() => setToast(null)} />
-      <UpdateDialog
-        open={updatesOpen}
-        onClose={() => setUpdatesOpen(false)}
-        updateState={updater.state}
-        onCheck={() => handleUpdateAction(updater.checkForUpdates, "Try checking again in a moment.")}
-        onDownload={() => handleUpdateAction(updater.downloadUpdate, "Try downloading the update again.")}
-        onRestart={async () => {
-          await handleUpdateAction(async () => {
-            await draft.saveNow();
-            return updater.restartAndInstall();
-          }, "Close and reopen Invoice Studio, then try the update again.");
-        }}
-      />
-    </div>
+      </div>
+    </InvoiceLayoutProvider>
   );
 }
