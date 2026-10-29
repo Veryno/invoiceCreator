@@ -1,6 +1,6 @@
 {
   "name": "invoice-studio",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A private, offline-first desktop invoice creator with professional PDF export.",
   "private": true,
   "author": {
