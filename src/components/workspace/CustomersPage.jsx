@@ -1,4 +1,5 @@
 import {
+  ArrowSquareIn,
   Plus,
   UsersThree,
 } from "@phosphor-icons/react";
@@ -47,6 +48,7 @@ export function CustomersPage({
   onCreateInvoice,
   onOpenInvoice,
   onSelectCustomer,
+  onImportQuickBooks,
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -129,15 +131,22 @@ export function CustomersPage({
         title="Customers"
         titleId="studio-customers-title"
         description="Keep billing details, private notes, balances, and invoice history together on this computer."
-        actions={onCreateCustomer ? (
-          <WorkspaceButton
-            icon={Plus}
-            variant="primary"
-            onClick={() => setCustomerDialog({ mode: "create", customer: null })}
-          >
-            Add customer
-          </WorkspaceButton>
-        ) : null}
+        actions={(
+          <>
+            {onImportQuickBooks ? (
+              <WorkspaceButton icon={ArrowSquareIn} onClick={onImportQuickBooks}>From QuickBooks</WorkspaceButton>
+            ) : null}
+            {onCreateCustomer ? (
+              <WorkspaceButton
+                icon={Plus}
+                variant="primary"
+                onClick={() => setCustomerDialog({ mode: "create", customer: null })}
+              >
+                Add customer
+              </WorkspaceButton>
+            ) : null}
+          </>
+        )}
       />
 
       <div className="studio-customers-layout">

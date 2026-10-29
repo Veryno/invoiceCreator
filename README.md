@@ -1,8 +1,10 @@
 # Invoice Studio
 
-Invoice Studio is an offline desktop app for creating professional PDF invoices. Add your company details and logo, enter the invoice, customize the design, and save the finished document as a PDF.
+Invoice Studio is a desktop invoicing app for contractors. Add your company and logo, bill customers with job site details and a product/service list built for construction, then save the invoice as a PDF or email it straight from the app.
 
-Invoices can be entered manually or imported from CSV, XLSX, and JSON files. Everything stays on the computer—there are no accounts, analytics, or cloud storage.
+Moving from QuickBooks? Export your customer list and the Sales by Customer Detail report, and import both in one step. Invoices can also be entered by hand or imported from CSV, XLSX, and JSON files.
+
+Your data stays on your computer. There are no accounts, analytics, or cloud storage. Email goes out through your own Gmail, Outlook, or other email account.
 
 ## Download
 

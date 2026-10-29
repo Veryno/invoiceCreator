@@ -120,6 +120,47 @@ function createInitialWorkspace({ now, idFactory } = {}) {
         },
         updatedAt: timestamp,
       },
+      email: {
+        subject: "Invoice {number} from {company}",
+        message: [
+          "Hi {customer},",
+          "",
+          "Attached is invoice {number} for {job}. The balance due is {balance}, due {dueDate}.",
+          "",
+          "Thank you for your business.",
+          "{company}",
+        ].join("\n"),
+        testAddress: "",
+        requireTest: true,
+      },
+      layout: {
+        labels: {},
+        columns: { serviceDate: true, item: true, quantity: true, rate: true, tax: true },
+        fields: [],
+      },
+      // Mirrors DEFAULT_SAVED_TEXT in src/lib/layout.js.
+      savedText: [
+        {
+          id: "text-payment",
+          title: "Payment options",
+          body: "Please make checks payable to the company name above, or pay by Zelle or bank transfer. Include the invoice number with your payment.",
+        },
+        {
+          id: "text-change-orders",
+          title: "Change orders",
+          body: "Any work beyond the scope described above requires a written change order and will be billed separately.",
+        },
+        {
+          id: "text-warranty",
+          title: "Workmanship warranty",
+          body: "Workmanship is warranted for one (1) year from completion. Materials carry the manufacturer’s warranty.",
+        },
+        {
+          id: "text-thanks",
+          title: "Thank you",
+          body: "Thank you for your business. We appreciate the opportunity to work on your project.",
+        },
+      ],
     },
     invoices: [],
     customers: [],

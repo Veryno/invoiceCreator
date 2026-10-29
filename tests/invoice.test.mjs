@@ -7,9 +7,11 @@ import {
   formatMoney,
   getAccentInkColor,
   getReadableAccentColor,
+  lineRateForAmount,
   makeLineItem,
   normalizeHexColorInput,
   normalizeInvoice,
+  parseNumberInput,
   sanitizeFilenamePart,
   validateInvoiceForExport,
 } from "../src/lib/invoice.js";
@@ -18,7 +20,8 @@ test("createDefaultInvoice returns independent, realistic drafts", () => {
   const first = createDefaultInvoice();
   const second = createDefaultInvoice();
 
-  assert.equal(first.company.name, "Northstar Studio & Build");
+  assert.equal(first.company.name, "Northstar Build Co.");
+  assert.ok(first.job.address);
   assert.equal(first.meta.currency, "USD");
   assert.match(first.meta.number, /^INV-\d{4}-001$/);
   assert.ok(first.lineItems.length >= 3);
@@ -28,7 +31,7 @@ test("createDefaultInvoice returns independent, realistic drafts", () => {
 
   first.company.name = "Changed";
   first.lineItems[0].description = "Changed";
-  assert.equal(second.company.name, "Northstar Studio & Build");
+  assert.equal(second.company.name, "Northstar Build Co.");
   assert.notEqual(second.lineItems[0].description, "Changed");
 });
 
@@ -73,7 +76,8 @@ test("normalizeInvoice does not inject sample financial values into partial inpu
 
   assert.equal(invoice.customer.name, "");
   assert.equal(invoice.adjustments.discountValue, 0);
-  assert.equal(invoice.adjustments.shipping, 0);
+  assert.equal(Object.hasOwn(invoice.adjustments, "shipping"), false);
+  assert.deepEqual(invoice.job, { name: "", address: "", info: "" });
   assert.equal(invoice.adjustments.deposit, 0);
   assert.equal(invoice.adjustments.taxRate, 0);
 });
@@ -140,7 +144,6 @@ test("calculateInvoice uses HALF_UP rounding and allocates discounts proportiona
     adjustments: {
       discountType: "fixed",
       discountValue: 20,
-      shipping: 10,
       deposit: 50,
       taxRate: 10,
     },
@@ -156,10 +159,39 @@ test("calculateInvoice uses HALF_UP rounding and allocates discounts proportiona
   assert.equal(calculation.taxableDiscount, 9.52);
   assert.equal(calculation.taxableBase, 90.48);
   assert.equal(calculation.tax, 9.05);
-  assert.equal(calculation.shipping, 10);
-  assert.equal(calculation.total, 209.06);
+  assert.equal(calculation.total, 199.06);
   assert.equal(calculation.deposit, 50);
-  assert.equal(calculation.balance, 159.06);
+  assert.equal(calculation.balance, 149.06);
+});
+
+test("legacy shipping becomes a non-taxable fee line so totals are unchanged", () => {
+  const invoice = normalizeInvoice({
+    lineItems: [makeLineItem({ id: "work", quantity: 1, rate: 100, taxable: true })],
+    adjustments: { shipping: "10", taxRate: 10 },
+  });
+
+  assert.deepEqual(
+    invoice.lineItems.map(({ id, rate, taxable }) => [id, rate, taxable]),
+    [["work", 100, true], ["line-fees", 10, false]],
+  );
+  assert.equal(calculateInvoice(invoice).total, 120);
+  assert.equal(normalizeInvoice(invoice).lineItems.length, 2);
+});
+
+test("lineRateForAmount back-calculates rate from a typed amount", () => {
+  assert.deepEqual(lineRateForAmount(500, 4), { quantity: 4, rate: 125 });
+  assert.deepEqual(lineRateForAmount(250, 0), { quantity: 1, rate: 250 });
+  const thirds = lineRateForAmount(100, 3);
+  assert.equal(calculateInvoice({ lineItems: [makeLineItem({ ...thirds })] }).subtotal, 100);
+});
+
+test("parseNumberInput accepts typed money and rejects partial text", () => {
+  assert.equal(parseNumberInput("$1,250.50"), 1250.5);
+  assert.equal(parseNumberInput("(40)"), -40);
+  assert.equal(parseNumberInput("1."), 1);
+  assert.equal(parseNumberInput(".5"), 0.5);
+  assert.equal(parseNumberInput(""), null);
+  assert.equal(parseNumberInput("abc"), null);
 });
 
 test("calculateInvoice caps percent discounts and fixed discounts at the subtotal", () => {

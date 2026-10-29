@@ -6,6 +6,12 @@ import {
 } from "../lib/invoice.js";
 import { useWorkspace } from "./useWorkspace.js";
 
+// Accepts either one field and value or a patch object, so edits that change
+// several fields together (amount → quantity and rate) stay one update.
+function linePatch(field, value) {
+  return field && typeof field === "object" ? field : { [field]: value };
+}
+
 function setAtPath(source, path, value) {
   const keys = path.split(".");
   const clone = { ...source };
@@ -140,7 +146,7 @@ export function useWorkspaceInvoiceDraft() {
     mutate((current) => ({
       ...current,
       lineItems: current.lineItems.map((line) => (
-        line.id === id ? { ...line, [field]: value } : line
+        line.id === id ? { ...line, ...linePatch(field, value) } : line
       )),
     }));
   }, [mutate]);
@@ -168,6 +174,20 @@ export function useWorkspaceInvoiceDraft() {
     }));
   }, [mutate]);
 
+  // Puts a deleted line back where it was (Undo). A lone blank line left by
+  // deleting the last real line is replaced rather than kept.
+  const restoreLine = useCallback((line, index) => {
+    mutate((current) => {
+      if (current.lineItems.some((entry) => entry.id === line.id)) return current;
+      const [only] = current.lineItems;
+      const leftBlank = current.lineItems.length === 1
+        && !only.item && !only.description && !Number(only.rate);
+      const lineItems = leftBlank ? [] : [...current.lineItems];
+      lineItems.splice(Math.min(index, lineItems.length), 0, line);
+      return { ...current, lineItems };
+    });
+  }, [mutate]);
+
   const replaceInvoice = useCallback((nextInvoice) => {
     mutate(() => normalizeInvoice(nextInvoice));
   }, [mutate]);
@@ -191,6 +211,7 @@ export function useWorkspaceInvoiceDraft() {
     recordId,
     removeLine,
     replaceInvoice,
+    restoreLine,
     saveNow,
     savedAt,
     saveStatus,
@@ -204,6 +225,7 @@ export function useWorkspaceInvoiceDraft() {
     recordId,
     removeLine,
     replaceInvoice,
+    restoreLine,
     saveNow,
     savedAt,
     saveStatus,

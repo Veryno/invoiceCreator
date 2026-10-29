@@ -12,6 +12,7 @@ import {
   archiveWorkspaceRecord,
   createInvoiceInWorkspace,
   normalizeWorkspace,
+  restoreWorkspaceRecord,
   setWorkspaceOnboarding,
   upsertWorkspaceRecord,
 } from "../lib/workspace.js";
@@ -144,6 +145,11 @@ export function WorkspaceProvider({ children, repository: providedRepository, re
     [update],
   );
 
+  const restoreRecord = useCallback(
+    (collection, id) => update((current) => restoreWorkspaceRecord(current, collection, id)),
+    [update],
+  );
+
   const setActiveInvoice = useCallback((id) => update((current) => {
     const exists = current.invoices.some((record) => record.id === id && !record.archivedAt);
     if (!exists) throw new Error("Invoice record was not found.");
@@ -166,6 +172,14 @@ export function WorkspaceProvider({ children, repository: providedRepository, re
       numbering: {
         ...current.preferences.numbering,
         ...(patch?.numbering && typeof patch.numbering === "object" ? patch.numbering : {}),
+      },
+      email: {
+        ...current.preferences.email,
+        ...(patch?.email && typeof patch.email === "object" ? patch.email : {}),
+      },
+      layout: {
+        ...current.preferences.layout,
+        ...(patch?.layout && typeof patch.layout === "object" ? patch.layout : {}),
       },
       onboarding: current.preferences.onboarding,
     },
@@ -213,6 +227,7 @@ export function WorkspaceProvider({ children, repository: providedRepository, re
     metadata: repository.getMetadata(),
     replaceWorkspace,
     repositoryKind: repository.kind,
+    restoreRecord,
     saveInvoice,
     saveRecord,
     savedAt,
@@ -233,6 +248,7 @@ export function WorkspaceProvider({ children, repository: providedRepository, re
     getSnapshot,
     replaceWorkspace,
     repository,
+    restoreRecord,
     saveInvoice,
     saveRecord,
     savedAt,

@@ -1,10 +1,15 @@
 import {
   Copy,
-  DotsSixVertical,
   Plus,
   Trash,
 } from "@phosphor-icons/react";
-import { calculateInvoice, formatMoney } from "../lib/invoice.js";
+import { useMemo } from "react";
+import { buildProductOptions } from "../lib/catalog.js";
+import { calculateInvoice, lineRateForAmount } from "../lib/invoice.js";
+import { labelFor } from "../lib/layout.js";
+import { useInvoiceLayout } from "../hooks/useInvoiceLayout.js";
+import { NumberField } from "./NumberField.jsx";
+import { ProductServicePicker } from "./ProductServicePicker.jsx";
 
 export function LineItemsTable({
   invoice,
@@ -12,13 +17,27 @@ export function LineItemsTable({
   addLine,
   duplicateLine,
   removeLine,
+  catalog = [],
+  onSaveCatalogItem,
 }) {
   const totals = calculateInvoice(invoice);
+  const layout = useInvoiceLayout();
+  const { columns } = layout;
+  const label = (key) => labelFor(layout, key);
+  const options = useMemo(() => buildProductOptions(catalog), [catalog]);
   const currencySymbol = new Intl.NumberFormat(invoice.meta.locale, {
     style: "currency",
     currency: invoice.meta.currency,
     currencyDisplay: "narrowSymbol",
   }).formatToParts(0).find((part) => part.type === "currency")?.value || invoice.meta.currency;
+
+  function pickProduct(line, option) {
+    const patch = { item: option.name };
+    if (!String(line.description || "").trim() && option.description) patch.description = option.description;
+    if (Number(option.rate) > 0) patch.rate = option.rate;
+    if (typeof option.taxable === "boolean") patch.taxable = option.taxable;
+    updateLine(line.id, patch);
+  }
 
   return (
     <section className="editor-card editor-card--lines" aria-labelledby="line-items-heading">
@@ -34,26 +53,23 @@ export function LineItemsTable({
         <table className="line-table">
           <thead>
             <tr>
-              <th className="drag-column"><span className="visually-hidden">Order</span></th>
-              {invoice.design.showServiceDate && <th>Service date</th>}
-              {invoice.design.showItem && <th>Product / service</th>}
-              <th>Description</th>
-              <th className="number-column">Qty</th>
-              <th className="number-column">Rate</th>
-              <th className="tax-column">Tax</th>
-              <th className="amount-column">Amount</th>
+              <th className="line-number-column">#</th>
+              {columns.serviceDate && <th className="service-date-column">{label("serviceDate")}</th>}
+              {columns.item && <th className="product-column">{label("item")}</th>}
+              <th className="description-column">{label("description")}</th>
+              {columns.quantity && <th className="number-column">{label("quantity")}</th>}
+              {columns.rate && <th className="number-column rate-column">{label("rate")}</th>}
+              <th className="amount-column">{label("amount")}</th>
+              {columns.tax && <th className="tax-column">Tax</th>}
               <th className="actions-column"><span className="visually-hidden">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {invoice.lineItems.map((line, index) => (
               <tr key={line.id}>
-                <td className="drag-column" data-label="Order">
-                  <DotsSixVertical size={18} aria-hidden="true" />
-                  <span className="visually-hidden">Item {index + 1}</span>
-                </td>
-                {invoice.design.showServiceDate && (
-                  <td data-label="Service date">
+                <td className="line-number-column" data-label="Line">{index + 1}</td>
+                {columns.serviceDate && (
+                  <td className="service-date-column" data-label={label("serviceDate")}>
                     <input
                       aria-label={`Service date for line ${index + 1}`}
                       type="date"
@@ -62,60 +78,76 @@ export function LineItemsTable({
                     />
                   </td>
                 )}
-                {invoice.design.showItem && (
-                  <td data-label="Product or service">
-                    <input
-                      aria-label={`Product or service for line ${index + 1}`}
+                {columns.item && (
+                  <td className="product-column" data-label={label("item")}>
+                    <ProductServicePicker
+                      label={`Product or service for line ${index + 1}`}
                       value={line.item}
-                      placeholder="Consulting"
-                      onChange={(event) => updateLine(line.id, "item", event.target.value)}
+                      options={options}
+                      onChange={(value) => updateLine(line.id, "item", value)}
+                      onPick={(option) => pickProduct(line, option)}
+                      onSaveNew={onSaveCatalogItem
+                        ? (name) => onSaveCatalogItem({
+                            name,
+                            description: line.description,
+                            rate: Number(line.rate) || 0,
+                            taxable: line.taxable,
+                          })
+                        : undefined}
                     />
                   </td>
                 )}
-                <td className="description-cell" data-label="Description">
+                <td className="description-cell" data-label={label("description")}>
                   <textarea
                     aria-label={`Description for line ${index + 1}`}
-                    rows="2"
+                    rows="1"
                     value={line.description}
-                    placeholder="Describe the work or product delivered"
+                    placeholder="Describe the work or materials"
                     onChange={(event) => updateLine(line.id, "description", event.target.value)}
                   />
                 </td>
-                <td className="number-column" data-label="Quantity">
-                  <input
-                    aria-label={`Quantity for line ${index + 1}`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={line.quantity}
-                    onChange={(event) => updateLine(line.id, "quantity", event.target.value)}
-                  />
-                </td>
-                <td className="number-column rate-input" data-label="Rate">
-                  <span aria-hidden="true">{currencySymbol}</span>
-                  <input
-                    aria-label={`Rate for line ${index + 1}`}
-                    type="number"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={line.rate}
-                    onChange={(event) => updateLine(line.id, "rate", event.target.value)}
-                  />
-                </td>
-                <td className="tax-column" data-label="Taxable">
-                  <label className="checkbox-control">
-                    <input
-                      type="checkbox"
-                      checked={line.taxable}
-                      onChange={(event) => updateLine(line.id, "taxable", event.target.checked)}
+                {columns.quantity && (
+                  <td className="number-column" data-label={label("quantity")}>
+                    <NumberField
+                      aria-label={`${label("quantity")} for line ${index + 1}`}
+                      value={line.quantity}
+                      emptyValue={0}
+                      onValue={(quantity) => updateLine(line.id, "quantity", quantity)}
                     />
-                    <span className="visually-hidden">Tax line {index + 1}</span>
-                  </label>
+                  </td>
+                )}
+                {columns.rate && (
+                  <td className="number-column rate-input" data-label={label("rate")}>
+                    <span aria-hidden="true">{currencySymbol}</span>
+                    <NumberField
+                      aria-label={`${label("rate")} for line ${index + 1}`}
+                      value={line.rate}
+                      decimals={2}
+                      onValue={(rate) => updateLine(line.id, "rate", rate)}
+                    />
+                  </td>
+                )}
+                <td className="amount-column rate-input" data-label={label("amount")}>
+                  <span aria-hidden="true">{currencySymbol}</span>
+                  <NumberField
+                    aria-label={`${label("amount")} for line ${index + 1}`}
+                    value={totals.lineItems[index]?.amount || 0}
+                    decimals={2}
+                    onValue={(amount) => updateLine(line.id, lineRateForAmount(amount, line.quantity))}
+                  />
                 </td>
-                <td className="amount-column" data-label="Amount">
-                  {formatMoney(totals.lineItems[index]?.amount || 0, invoice.meta.currency, invoice.meta.locale)}
-                </td>
+                {columns.tax && (
+                  <td className="tax-column" data-label="Taxable">
+                    <label className="checkbox-control">
+                      <input
+                        type="checkbox"
+                        checked={line.taxable}
+                        onChange={(event) => updateLine(line.id, "taxable", event.target.checked)}
+                      />
+                      <span className="visually-hidden">Tax line {index + 1}</span>
+                    </label>
+                  </td>
+                )}
                 <td className="actions-column" data-label="Actions">
                   <div className="row-actions">
                     <button
@@ -146,7 +178,7 @@ export function LineItemsTable({
 
       <button type="button" className="add-line-button" onClick={addLine}>
         <Plus size={16} weight="bold" aria-hidden="true" />
-        Add another line
+        Add line
       </button>
     </section>
   );

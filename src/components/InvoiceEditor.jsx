@@ -2,7 +2,16 @@ import { InvoiceHeaderForm } from "./InvoiceHeaderForm.jsx";
 import { LineItemsTable } from "./LineItemsTable.jsx";
 import { NotesAndTotals } from "./NotesAndTotals.jsx";
 
-export function InvoiceEditor({ draft, customers, selectedCustomerId, onSelectCustomer }) {
+export function InvoiceEditor({
+  draft,
+  customers,
+  selectedCustomerId,
+  onSelectCustomer,
+  catalog,
+  onSaveCatalogItem,
+  onRemoveLine,
+  savedText,
+}) {
   return (
     <div className="editor-stack">
       <InvoiceHeaderForm
@@ -17,9 +26,11 @@ export function InvoiceEditor({ draft, customers, selectedCustomerId, onSelectCu
         updateLine={draft.updateLine}
         addLine={draft.addLine}
         duplicateLine={draft.duplicateLine}
-        removeLine={draft.removeLine}
+        removeLine={onRemoveLine || draft.removeLine}
+        catalog={catalog}
+        onSaveCatalogItem={onSaveCatalogItem}
       />
-      <NotesAndTotals invoice={draft.invoice} updateField={draft.updateField} />
+      <NotesAndTotals invoice={draft.invoice} updateField={draft.updateField} savedText={savedText} />
     </div>
   );
 }

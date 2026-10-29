@@ -1,4 +1,5 @@
 import {
+  ArrowSquareIn,
   FileText,
   Plus,
   UploadSimple,
@@ -44,6 +45,7 @@ export function InvoicesPage({
   initialCurrencyFilter = "all",
   onNewInvoice,
   onImportInvoice,
+  onImportQuickBooks,
   onOpenInvoice,
   onDuplicateInvoice,
   onExportInvoice,
@@ -97,8 +99,11 @@ export function InvoicesPage({
         description="Find, review, export, and continue every invoice saved on this computer."
         actions={(
           <>
+            {onImportQuickBooks ? (
+              <WorkspaceButton icon={ArrowSquareIn} onClick={onImportQuickBooks}>From QuickBooks</WorkspaceButton>
+            ) : null}
             {onImportInvoice ? (
-              <WorkspaceButton icon={UploadSimple} onClick={onImportInvoice}>Import</WorkspaceButton>
+              <WorkspaceButton icon={UploadSimple} onClick={onImportInvoice}>Import file</WorkspaceButton>
             ) : null}
             {onNewInvoice ? (
               <WorkspaceButton icon={Plus} variant="primary" onClick={onNewInvoice}>New invoice</WorkspaceButton>
@@ -146,12 +151,15 @@ export function InvoicesPage({
           <EmptyState
             icon={FileText}
             title="Your invoice library is empty"
-            description="Create an invoice from scratch or import an existing CSV, XLSX, or JSON file."
+            description="Create an invoice from scratch, bring your history over from QuickBooks, or import a CSV, XLSX, or JSON file."
             headingLevel={3}
             actions={(
               <>
                 {onNewInvoice ? (
                   <WorkspaceButton icon={Plus} variant="primary" onClick={onNewInvoice}>New invoice</WorkspaceButton>
+                ) : null}
+                {onImportQuickBooks ? (
+                  <WorkspaceButton icon={ArrowSquareIn} onClick={onImportQuickBooks}>Import from QuickBooks</WorkspaceButton>
                 ) : null}
                 {onImportInvoice ? (
                   <WorkspaceButton icon={UploadSimple} onClick={onImportInvoice}>Import invoice</WorkspaceButton>

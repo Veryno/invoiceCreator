@@ -1,5 +1,8 @@
 import { Info } from "@phosphor-icons/react";
 import { calculateInvoice, formatMoney } from "../lib/invoice.js";
+import { appendSavedText } from "../lib/layout.js";
+import { NumberField } from "./NumberField.jsx";
+import { SavedTextMenu } from "./SavedTextMenu.jsx";
 
 function MoneyRow({ label, value, strong = false, muted = false }) {
   return (
@@ -10,7 +13,34 @@ function MoneyRow({ label, value, strong = false, muted = false }) {
   );
 }
 
-export function NotesAndTotals({ invoice, updateField }) {
+function TextWithSavedText({ id, label, path, value, placeholder, updateField, savedText }) {
+  return (
+    <div className="form-field form-field--saved-text">
+      <div className="form-field-head">
+        <label htmlFor={id}>{label}</label>
+        {savedText ? (
+          <SavedTextMenu
+            fieldLabel={label}
+            savedText={savedText.entries}
+            currentText={value}
+            onInsert={(body) => updateField(path, appendSavedText(value, body))}
+            onSaveCurrent={() => savedText.onSave(value)}
+            onManage={savedText.onManage}
+          />
+        ) : null}
+      </div>
+      <textarea
+        id={id}
+        rows="3"
+        value={value}
+        onChange={(event) => updateField(path, event.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+export function NotesAndTotals({ invoice, updateField, savedText }) {
   const totals = calculateInvoice(invoice);
   const money = (value) => formatMoney(value, invoice.meta.currency, invoice.meta.locale);
   const currencySymbol = new Intl.NumberFormat(invoice.meta.locale, {
@@ -28,26 +58,24 @@ export function NotesAndTotals({ invoice, updateField }) {
             <h2 id="notes-heading">Notes &amp; payment</h2>
           </div>
         </div>
-        <label className="form-field" htmlFor="invoice-notes">
-          <span>Note to customer</span>
-          <textarea
-            id="invoice-notes"
-            rows="3"
-            value={invoice.content.notes}
-            onChange={(event) => updateField("content.notes", event.target.value)}
-            placeholder="Thank your customer or add project context"
-          />
-        </label>
-        <label className="form-field" htmlFor="payment-instructions">
-          <span>Payment instructions</span>
-          <textarea
-            id="payment-instructions"
-            rows="3"
-            value={invoice.content.paymentInstructions}
-            onChange={(event) => updateField("content.paymentInstructions", event.target.value)}
-            placeholder="Bank details, check instructions, or payment link"
-          />
-        </label>
+        <TextWithSavedText
+          id="invoice-notes"
+          label="Message on invoice"
+          path="content.notes"
+          value={invoice.content.notes}
+          placeholder="Thank your customer, add terms, warranty, or project context"
+          updateField={updateField}
+          savedText={savedText}
+        />
+        <TextWithSavedText
+          id="payment-instructions"
+          label="Payment instructions"
+          path="content.paymentInstructions"
+          value={invoice.content.paymentInstructions}
+          placeholder="Check, Zelle, or bank transfer instructions"
+          updateField={updateField}
+          savedText={savedText}
+        />
       </div>
 
       <div className="totals-editor" aria-label="Invoice totals">
@@ -56,13 +84,10 @@ export function NotesAndTotals({ invoice, updateField }) {
         <div className="adjustment-row">
           <label htmlFor="invoice-discount">Discount</label>
           <div className="adjustment-control">
-            <input
+            <NumberField
               id="invoice-discount"
-              type="number"
-              min="0"
-              step="0.01"
               value={invoice.adjustments.discountValue}
-              onChange={(event) => updateField("adjustments.discountValue", event.target.value)}
+              onValue={(value) => updateField("adjustments.discountValue", value)}
             />
             <select
               aria-label="Discount type"
@@ -77,31 +102,12 @@ export function NotesAndTotals({ invoice, updateField }) {
         {totals.discount > 0 && <MoneyRow label="Discount applied" value={`−${money(totals.discount)}`} muted />}
 
         <div className="adjustment-row">
-          <label htmlFor="invoice-shipping">Shipping / fees</label>
-          <div className="money-input">
-            <span aria-hidden="true">{currencySymbol}</span>
-            <input
-              id="invoice-shipping"
-              type="number"
-              min="0"
-              step="0.01"
-              value={invoice.adjustments.shipping}
-              onChange={(event) => updateField("adjustments.shipping", event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="adjustment-row">
           <label htmlFor="invoice-tax-rate">Tax rate</label>
           <div className="suffix-input">
-            <input
+            <NumberField
               id="invoice-tax-rate"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
               value={invoice.adjustments.taxRate}
-              onChange={(event) => updateField("adjustments.taxRate", event.target.value)}
+              onValue={(value) => updateField("adjustments.taxRate", value)}
             />
             <span aria-hidden="true">%</span>
           </div>
@@ -110,16 +116,13 @@ export function NotesAndTotals({ invoice, updateField }) {
         <MoneyRow label="Invoice total" value={money(totals.total)} strong />
 
         <div className="adjustment-row">
-          <label htmlFor="invoice-deposit">Deposit / payment</label>
+          <label htmlFor="invoice-deposit">Deposit received</label>
           <div className="money-input">
             <span aria-hidden="true">{currencySymbol}</span>
-            <input
+            <NumberField
               id="invoice-deposit"
-              type="number"
-              min="0"
-              step="0.01"
               value={invoice.adjustments.deposit}
-              onChange={(event) => updateField("adjustments.deposit", event.target.value)}
+              onValue={(value) => updateField("adjustments.deposit", value)}
             />
           </div>
         </div>

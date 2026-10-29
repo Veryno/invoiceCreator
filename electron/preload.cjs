@@ -16,6 +16,15 @@ const IPC_CHANNELS = Object.freeze({
   closeSaveRequested: "invoice-desktop:close-save-requested",
   closeSaveComplete: "invoice-desktop:close-save-complete",
   closeSaveReleased: "invoice-desktop:close-save-released",
+  getEmailSettings: "invoice-desktop:get-email-settings",
+  saveEmailSettings: "invoice-desktop:save-email-settings",
+  verifyEmailSettings: "invoice-desktop:verify-email-settings",
+  sendInvoiceEmail: "invoice-desktop:send-invoice-email",
+  getBackupSettings: "invoice-desktop:get-backup-settings",
+  saveBackupSettings: "invoice-desktop:save-backup-settings",
+  chooseBackupFolder: "invoice-desktop:choose-backup-folder",
+  backupNow: "invoice-desktop:backup-now",
+  openBackupFolder: "invoice-desktop:open-backup-folder",
 });
 
 const CLOSE_REASONS = new Set(["window-close", "restart-update"]);
@@ -61,6 +70,58 @@ const invoiceDesktop = Object.freeze({
       contents: value.contents,
       filters: value.filters,
     });
+  },
+
+  getEmailSettings() {
+    return ipcRenderer.invoke(IPC_CHANNELS.getEmailSettings);
+  },
+
+  saveEmailSettings(options) {
+    const value = requireOptions(options, "Email settings");
+    return ipcRenderer.invoke(IPC_CHANNELS.saveEmailSettings, {
+      settings: value.settings,
+      ...(typeof value.password === "string" ? { password: value.password } : {}),
+    });
+  },
+
+  verifyEmailSettings() {
+    return ipcRenderer.invoke(IPC_CHANNELS.verifyEmailSettings);
+  },
+
+  sendInvoiceEmail(options) {
+    const value = requireOptions(options, "Invoice email");
+    return ipcRenderer.invoke(IPC_CHANNELS.sendInvoiceEmail, {
+      to: value.to,
+      cc: value.cc,
+      subject: value.subject,
+      message: value.message,
+      suggestedName: value.suggestedName,
+      pageSize: value.pageSize,
+    });
+  },
+
+  getBackupSettings() {
+    return ipcRenderer.invoke(IPC_CHANNELS.getBackupSettings);
+  },
+
+  saveBackupSettings(options) {
+    const value = requireOptions(options, "Backup settings");
+    return ipcRenderer.invoke(IPC_CHANNELS.saveBackupSettings, {
+      enabled: value.enabled,
+      keep: value.keep,
+    });
+  },
+
+  chooseBackupFolder() {
+    return ipcRenderer.invoke(IPC_CHANNELS.chooseBackupFolder);
+  },
+
+  backupNow() {
+    return ipcRenderer.invoke(IPC_CHANNELS.backupNow);
+  },
+
+  openBackupFolder() {
+    return ipcRenderer.invoke(IPC_CHANNELS.openBackupFolder);
   },
 
   getWorkspace() {

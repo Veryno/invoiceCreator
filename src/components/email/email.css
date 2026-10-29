@@ -1,0 +1,273 @@
+.send-dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.send-notice {
+  margin: 0 24px 24px;
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  color: var(--ink);
+  background: var(--surface-accent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.send-notice svg {
+  flex: none;
+  color: var(--brand);
+}
+
+.send-notice strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.send-notice p {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.send-success {
+  padding: 28px 24px 32px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.send-success svg {
+  color: var(--success);
+}
+
+.send-success h3 {
+  margin: 4px 0 0;
+  font-size: 1.25rem;
+}
+
+.send-success p {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+}
+
+.send-steps {
+  margin: 0 24px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  list-style: none;
+}
+
+.send-steps li {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-soft);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.send-steps li > span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.send-steps li.is-current {
+  color: var(--ink);
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+.send-steps li.is-current > span {
+  color: #ffffff;
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.send-steps li.is-done {
+  color: var(--success);
+}
+
+.send-steps li.is-done > span {
+  color: var(--success);
+  background: transparent;
+  border: 0;
+}
+
+.send-fields textarea {
+  min-height: 140px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.send-attachment,
+.send-tested,
+.send-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.send-tested {
+  color: var(--success);
+  font-weight: 650;
+}
+
+.email-status {
+  margin-left: auto;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  color: var(--ink-soft);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.email-status--on {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: transparent;
+}
+
+.email-settings-form,
+.email-template-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.email-template-fields {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.email-template-fields h3,
+.email-template-fields > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.email-template-fields h3 {
+  font-size: 0.9375rem;
+}
+
+.email-template-fields > p {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.email-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.email-field--wide,
+.email-settings-note--wide,
+.email-settings-actions {
+  grid-column: 1 / -1;
+}
+
+.email-field input,
+.email-field select,
+.email-field textarea {
+  min-height: 40px;
+  padding: 8px 11px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-weight: 450;
+}
+
+.email-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.email-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  min-height: 40px;
+  font-size: 0.8125rem;
+}
+
+.email-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+}
+
+.email-settings-note {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.email-settings-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warning);
+}
+
+.email-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.email-settings-message {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.email-settings-message--success {
+  color: var(--success);
+}
+
+.email-settings-message--error {
+  color: var(--danger);
+}
+
+@media (max-width: 720px) {
+  .email-settings-form,
+  .email-template-fields,
+  .send-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

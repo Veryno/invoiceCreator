@@ -7,7 +7,6 @@ import { useId, useState } from "react";
 import {
   BrandColorField,
   SetupSelectField,
-  SetupSwitch,
   SetupTextField,
 } from "./SetupControls.jsx";
 import {
@@ -162,20 +161,7 @@ export function TemplateEditor({ preset, onUpdatePreset }) {
           <legend className="visually-hidden">Content controls</legend>
           <div className="setup-control-group">
             <h3>Table columns</h3>
-            <SetupSwitch
-              id={`${generatedId}-service-date`}
-              checked={design.showServiceDate}
-              label="Service date"
-              description="Show when each line item was delivered."
-              onChange={(event) => updateDesign({ showServiceDate: event.target.checked })}
-            />
-            <SetupSwitch
-              id={`${generatedId}-item-name`}
-              checked={design.showItem}
-              label="Product or service"
-              description="Keep a short item name beside its description."
-              onChange={(event) => updateDesign({ showItem: event.target.checked })}
-            />
+            <p className="setup-field-hint">Columns, labels, and your own fields are set once for every invoice on the Customize page.</p>
           </div>
 
           <div className="setup-control-group setup-field-grid">

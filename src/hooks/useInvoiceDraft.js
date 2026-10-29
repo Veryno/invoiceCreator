@@ -17,6 +17,12 @@ function readDraft() {
   }
 }
 
+// Accepts either one field and value or a patch object, so edits that change
+// several fields together (amount → quantity and rate) stay one update.
+function linePatch(field, value) {
+  return field && typeof field === "object" ? field : { [field]: value };
+}
+
 function setAtPath(source, path, value) {
   const keys = path.split(".");
   const clone = { ...source };
@@ -60,7 +66,7 @@ export function useInvoiceDraft() {
     setInvoice((current) => ({
       ...current,
       lineItems: current.lineItems.map((line) =>
-        line.id === id ? { ...line, [field]: value } : line,
+        line.id === id ? { ...line, ...linePatch(field, value) } : line,
       ),
     }));
   }, []);
